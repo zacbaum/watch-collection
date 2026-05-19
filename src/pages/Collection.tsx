@@ -20,6 +20,7 @@ import { Card } from '../components/Card'
 import { Empty } from '../components/Empty'
 import { StatusBadge } from '../components/StatusBadge'
 import { Monogram } from '../components/Monogram'
+import { Photo } from '../components/Photo'
 import { useData, useDataContext } from '../hooks/useData'
 import type { Watch, WatchStatus } from '../types'
 import { daysSince, formatGbp, classNames, titleCase } from '../lib/utils'
@@ -208,7 +209,15 @@ function WatchTile({
       />
       <div className="p-3 pl-4">
         <div className="flex items-start gap-3">
-          <Monogram brand={watch.brand} model={watch.model} size={36} rounded="lg" />
+          {watch.photos && watch.photos.length > 0 ? (
+            <Photo
+              path={watch.photos[0]}
+              alt={`${watch.brand} ${watch.model}`}
+              className="w-9 h-9 rounded-lg object-cover border border-border shrink-0"
+            />
+          ) : (
+            <Monogram brand={watch.brand} model={watch.model} size={36} rounded="lg" />
+          )}
           <div className="min-w-0 flex-1">
             <div className="flex items-start justify-between gap-2">
               <div className="min-w-0 flex-1">
