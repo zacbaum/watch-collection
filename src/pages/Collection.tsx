@@ -12,6 +12,8 @@ import {
   XAxis,
   YAxis,
   CartesianGrid,
+  ScatterChart,
+  Scatter,
 } from 'recharts'
 import { Gate } from '../components/Gate'
 import { Card } from '../components/Card'
@@ -164,7 +166,8 @@ function CompositionSection({ watches }: { watches: Watch[] }) {
         <BrandMixCard watches={watches} />
         <MovementMixCard watches={watches} />
         <CategoryMixCard watches={watches} />
-        <CaseSizeHistogramCard watches={watches} />
+        <CaseGeometryCard watches={watches} />
+        <LugWidthHistogramCard watches={watches} />
         <CaseMaterialMixCard watches={watches} />
         <DecadeHistogramCard watches={watches} />
       </div>
@@ -450,35 +453,120 @@ function CategoryMixCard({ watches }: { watches: Watch[] }) {
   )
 }
 
-function CaseSizeHistogramCard({ watches }: { watches: Watch[] }) {
+function CaseGeometryCard({ watches }: { watches: Watch[] }) {
+  const points = useMemo(
+    () =>
+      watches
+        .filter(
+          (w): w is Watch & { caseDiameterMm: number; caseThicknessMm: number } =>
+            w.caseDiameterMm != null && w.caseThicknessMm != null,
+        )
+        .map((w) => ({
+          id: w.id,
+          name: `${w.brand} ${w.model}`,
+          size: w.caseDiameterMm,
+          thickness: w.caseThicknessMm,
+          color: colorFor(`${w.brand}|${w.model}`),
+        })),
+    [watches],
+  )
+
+  return (
+    <Card title="Case size vs thickness">
+      {points.length === 0 ? (
+        <div className="text-xs text-text-muted">
+          Add case diameters and thicknesses in the watch detail view to see this.
+        </div>
+      ) : (
+        <div className="h-48">
+          <ResponsiveContainer width="100%" height="100%">
+            <ScatterChart margin={{ top: 8, right: 12, bottom: 18, left: 4 }}>
+              <CartesianGrid stroke="#f4f4f3" />
+              <XAxis
+                type="number"
+                dataKey="size"
+                name="Diameter"
+                domain={['dataMin - 1', 'dataMax + 1']}
+                fontSize={10}
+                tickFormatter={(v) => `${v}mm`}
+                label={{
+                  value: 'Diameter (mm)',
+                  position: 'insideBottom',
+                  offset: -6,
+                  fontSize: 10,
+                }}
+              />
+              <YAxis
+                type="number"
+                dataKey="thickness"
+                name="Thickness"
+                domain={['dataMin - 1', 'dataMax + 1']}
+                fontSize={10}
+                tickFormatter={(v) => `${v}mm`}
+                width={40}
+              />
+              <Tooltip
+                cursor={{ strokeDasharray: '3 3' }}
+                content={({ active, payload }) => {
+                  if (!active || !payload?.length) return null
+                  const d = payload[0].payload as (typeof points)[0]
+                  return (
+                    <div className="bg-bg border border-border rounded px-2 py-1 text-[11px]">
+                      <div className="font-medium">{d.name}</div>
+                      <div className="text-text-muted">
+                        Ø {d.size}mm · {d.thickness}mm thick
+                      </div>
+                    </div>
+                  )
+                }}
+              />
+              <Scatter data={points}>
+                {points.map((p) => (
+                  <Cell key={p.id} fill={p.color} />
+                ))}
+              </Scatter>
+            </ScatterChart>
+          </ResponsiveContainer>
+        </div>
+      )}
+    </Card>
+  )
+}
+
+function LugWidthHistogramCard({ watches }: { watches: Watch[] }) {
   const rows = useMemo(() => {
-    const buckets = new Map<string, number>()
+    const buckets = new Map<number, number>()
     for (const w of watches) {
-      if (w.caseDiameterMm == null) continue
-      const size = Math.round(w.caseDiameterMm)
-      const key = `${size}mm`
-      buckets.set(key, (buckets.get(key) ?? 0) + 1)
+      if (w.lugWidthMm == null) continue
+      const lug = Math.round(w.lugWidthMm)
+      buckets.set(lug, (buckets.get(lug) ?? 0) + 1)
     }
-    return Array.from(buckets.entries())
-      .map(([size, count]) => ({ size, count, sortKey: parseInt(size, 10) }))
-      .sort((a, b) => a.sortKey - b.sortKey)
+    if (buckets.size === 0) return []
+    // Fill gaps so the x-axis is continuous across the lug-width range
+    const min = Math.min(...buckets.keys())
+    const max = Math.max(...buckets.keys())
+    const out: Array<{ width: string; count: number; sortKey: number }> = []
+    for (let n = min; n <= max; n++) {
+      out.push({ width: `${n}mm`, count: buckets.get(n) ?? 0, sortKey: n })
+    }
+    return out
   }, [watches])
 
   return (
-    <Card title="Case size">
+    <Card title="Lug width">
       {rows.length === 0 ? (
         <div className="text-xs text-text-muted">
-          Add case diameters in the watch detail view to see this.
+          Add lug widths in the watch detail view to see this.
         </div>
       ) : (
         <div className="h-48">
           <ResponsiveContainer width="100%" height="100%">
             <BarChart data={rows}>
               <CartesianGrid stroke="#f4f4f3" vertical={false} />
-              <XAxis dataKey="size" fontSize={10} />
+              <XAxis dataKey="width" fontSize={10} />
               <YAxis fontSize={10} allowDecimals={false} />
               <Tooltip contentStyle={{ fontSize: 11 }} />
-              <Bar dataKey="count" fill="#2563eb" radius={[3, 3, 0, 0]} />
+              <Bar dataKey="count" fill="#0d9488" radius={[3, 3, 0, 0]} />
             </BarChart>
           </ResponsiveContainer>
         </div>
