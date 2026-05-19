@@ -1,4 +1,16 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
+
+function useIsNarrow(breakpoint = 640): boolean {
+  const [narrow, setNarrow] = useState(
+    typeof window !== 'undefined' ? window.innerWidth < breakpoint : false,
+  )
+  useEffect(() => {
+    const handler = () => setNarrow(window.innerWidth < breakpoint)
+    window.addEventListener('resize', handler)
+    return () => window.removeEventListener('resize', handler)
+  }, [breakpoint])
+  return narrow
+}
 import {
   BarChart,
   Bar,
@@ -37,6 +49,7 @@ import {
   rangeLabel,
   rangeSince,
   rotationDiversityByMonth,
+  rotationScore,
   watchShareByMonth,
   yearKeysInRange,
   type TimeRange,
@@ -76,10 +89,12 @@ function AnalyticsInner() {
         <TimeRangeFilter value={range} onChange={setRange} />
       </div>
 
-      {/* Compact: top streak + most stale owned watch */}
+      {/* Compact: top streak + most stale owned watch + rotation metrics */}
       <HeadlineStrip
         watches={data.watches}
         wearLog={data.wearLog}
+        filteredWearLog={filteredWearLog}
+        rangeLabel={rangeLabel(range)}
         watchColors={watchColors}
       />
 
@@ -145,13 +160,17 @@ function AnalyticsInner() {
 function HeadlineStrip({
   watches,
   wearLog,
+  filteredWearLog,
+  rangeLabel,
   watchColors,
 }: {
   watches: Watch[]
   wearLog: WearLogEntry[]
+  filteredWearLog: WearLogEntry[]
+  rangeLabel: string
   watchColors: Map<string, string>
 }) {
-  const { topStreak, mostStale } = useMemo(() => {
+  const { topStreak, mostStale, rotation } = useMemo(() => {
     const streaks = perWatchStreaks(watches, wearLog).filter((s) => s.totalWears > 0)
     const top = streaks.sort((a, b) => b.longestStreak - a.longestStreak)[0]
 
@@ -165,7 +184,6 @@ function HeadlineStrip({
     }
     const today = new Date()
     let stalest: { watchId: string; lastWorn: string; daysSinceWorn: number } | null = null
-    // Include owned watches that have never been worn too — they're maximally stale
     for (const w of watches.filter((x) => x.status === 'owned')) {
       const last = ownedLastWorn.get(w.id)
       const days = last
@@ -175,8 +193,10 @@ function HeadlineStrip({
         stalest = { watchId: w.id, lastWorn: last ?? '', daysSinceWorn: days }
       }
     }
-    return { topStreak: top, mostStale: stalest }
-  }, [watches, wearLog])
+
+    const rotation = rotationScore(filteredWearLog)
+    return { topStreak: top, mostStale: stalest, rotation }
+  }, [watches, wearLog, filteredWearLog])
 
   const watchOf = (id: string) => watches.find((w) => w.id === id)
 
@@ -210,16 +230,34 @@ function HeadlineStrip({
     </div>
   )
 
-  if (!topStreak && !mostStale) return null
+  if (!topStreak && !mostStale && rotation.score == null) return null
 
   return (
-    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+    <div className="grid grid-cols-2 lg:grid-cols-4 gap-2">
+      {rotation.score != null && (
+        <Chip
+          label={`Rotation score (${rangeLabel})`}
+          value={`${rotation.score}/100`}
+          sub={`across ${rotation.uniqueWatches} watch${rotation.uniqueWatches === 1 ? '' : 'es'}`}
+        />
+      )}
+      {rotation.score != null && (
+        <Chip
+          label={`Effective rotation (${rangeLabel})`}
+          value={rotation.effective.toFixed(1)}
+          sub="equally-weighted watches"
+        />
+      )}
       {topStreak && (
         <Chip
-          label="Longest streak (all time)"
+          label="Longest streak"
           value={`${topStreak.longestStreak}d`}
           watch={watchOf(topStreak.watchId)}
-          sub={topStreak.longestStreakRange ? `from ${fmt(topStreak.longestStreakRange.from)}` : undefined}
+          sub={
+            topStreak.longestStreakRange
+              ? `from ${fmt(topStreak.longestStreakRange.from)}`
+              : undefined
+          }
         />
       )}
       {mostStale && (
@@ -899,6 +937,7 @@ function WatchShareCard({
   watchColors: Map<string, string>
   rangeLabel: string
 }) {
+  const narrow = useIsNarrow()
   // Build per-month ranked stack data. Each month, the most-worn watch goes
   // at the BOTTOM of the bar (rank0), next most worn above it (rank1), etc.
   // Stack order varies bar-to-bar — the bottom segment may be a different
@@ -971,14 +1010,16 @@ function WatchShareCard({
               tickFormatter={(m) => {
                 const [y, mm] = String(m).split('-')
                 const month = parseInt(mm, 10)
-                if ([1, 4, 7, 10].includes(month)) {
+                // On narrow screens, only show year-start label (Jan)
+                const labelMonths = narrow ? [1] : [1, 4, 7, 10]
+                if (labelMonths.includes(month)) {
                   const labels = ['', 'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
-                  return `${labels[month]} '${y.slice(2)}`
+                  return narrow ? `'${y.slice(2)}` : `${labels[month]} '${y.slice(2)}`
                 }
                 return ''
               }}
             />
-            <YAxis fontSize={10} allowDecimals={false} />
+            <YAxis fontSize={10} allowDecimals={false} width={narrow ? 24 : 30} />
             <Tooltip
               cursor={{ fill: 'rgba(0,0,0,0.03)' }}
               content={({ active, payload, label }) => {
@@ -1129,10 +1170,11 @@ function WatchYearHeatmapCard({
     )
   }
 
-  const LABEL_W = 180
-  const TOTAL_W = 50
+  const narrow = useIsNarrow()
+  const LABEL_W = narrow ? 110 : 180
+  const TOTAL_W = narrow ? 36 : 50
   // CSS grid: label column | N year columns (flex-equal) | total column
-  const gridTemplate = `${LABEL_W}px repeat(${years.length}, minmax(8px, 1fr)) ${TOTAL_W}px`
+  const gridTemplate = `${LABEL_W}px repeat(${years.length}, minmax(${narrow ? 6 : 8}px, 1fr)) ${TOTAL_W}px`
 
   return (
     <Card title="Wear heatmap · watch × year" padding={false}>

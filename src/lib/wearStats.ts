@@ -33,6 +33,42 @@ export function filterWearLog(
 }
 
 /**
+ * Rotation score: how evenly wears are spread across watches.
+ *
+ *   score = round( H / log(N) * 100 )       where
+ *     H = -Σ p_i log p_i              (Shannon entropy of per-watch wear share)
+ *     N = number of distinct watches worn in the window
+ *
+ * - 100 = perfectly even rotation (every watch worn equally often)
+ * - 0   = one watch wore every day in the window
+ * - undefined when fewer than 2 watches were worn
+ *
+ * "Effective watches" = e^H — the equivalent number of equally-weighted
+ * watches that would produce the same entropy. If you rotate 4 watches
+ * evenly, effective = 4; if one dominates, effective < 4.
+ */
+export function rotationScore(wearLog: WearLogEntry[]): {
+  score: number | null
+  effective: number
+  uniqueWatches: number
+  totalWears: number
+} {
+  const counts = new Map<string, number>()
+  for (const e of wearLog) counts.set(e.watchId, (counts.get(e.watchId) ?? 0) + 1)
+  const total = wearLog.length
+  const n = counts.size
+  if (total === 0) return { score: null, effective: 0, uniqueWatches: 0, totalWears: 0 }
+  let h = 0
+  for (const c of counts.values()) {
+    const p = c / total
+    if (p > 0) h -= p * Math.log(p)
+  }
+  const effective = Math.exp(h)
+  const score = n > 1 ? Math.round((h / Math.log(n)) * 100) : null
+  return { score, effective, uniqueWatches: n, totalWears: total }
+}
+
+/**
  * Generate every yyyy-MM key in the range [from, to] inclusive. Both bounds
  * are ISO yyyy-MM-dd; only the year-month portion is used.
  */

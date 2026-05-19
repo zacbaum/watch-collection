@@ -23,7 +23,7 @@ export function Card({ children, className, title, action, padding = true }: Car
           {action}
         </div>
       )}
-      <div className={classNames(padding && 'p-4', 'flex-1 flex flex-col min-h-0')}>{children}</div>
+      <div className={classNames(padding && 'p-3 sm:p-4', 'flex-1 flex flex-col min-h-0')}>{children}</div>
     </div>
   )
 }
