@@ -1,7 +1,9 @@
-import { useMemo, useState } from 'react'
+import { useMemo, useRef, useState } from 'react'
+import { nanoid } from 'nanoid'
 import { Link, useParams, useNavigate } from 'react-router-dom'
 import { Gate } from '../components/Gate'
 import { Card } from '../components/Card'
+import { Photo } from '../components/Photo'
 import { StatusBadge } from '../components/StatusBadge'
 import { useData, useDataContext } from '../hooks/useData'
 import type { Currency, Money, Watch, WatchCategory, WatchStatus, Movement } from '../types'
@@ -15,7 +17,9 @@ import {
   titleCase,
 } from '../lib/utils'
 import { toGbp } from '../lib/fx'
-import { ChevronLeft, Trash2, Save } from 'lucide-react'
+import { loadAuth } from '../lib/auth'
+import { uploadPhoto } from '../lib/storage'
+import { ChevronLeft, Trash2, Save, ImagePlus, X } from 'lucide-react'
 
 export function WatchDetail() {
   return (
@@ -142,6 +146,10 @@ function WatchDetailInner() {
 
       {watch.status === 'sold' && <SaleSummary watch={watch} />}
 
+      {!editing && watch.photos && watch.photos.length > 0 && (
+        <PhotoGallery photos={watch.photos} />
+      )}
+
       {editing ? (
         <EditForm watch={watch} onClose={() => setEditing(false)} />
       ) : (
@@ -174,6 +182,22 @@ function WatchDetailInner() {
         </button>
       </div>
     </div>
+  )
+}
+
+function PhotoGallery({ photos }: { photos: string[] }) {
+  return (
+    <Card title={`Photos (${photos.length})`} padding={false}>
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2 p-3">
+        {photos.map((p) => (
+          <Photo
+            key={p}
+            path={p}
+            className="w-full aspect-square object-cover rounded-md border border-border"
+          />
+        ))}
+      </div>
+    </Card>
   )
 }
 
@@ -273,9 +297,42 @@ function EditForm({ watch, onClose }: { watch: Watch; onClose: () => void }) {
   const { mutate } = useDataContext()
   const [w, setW] = useState<Watch>({ ...watch })
   const [busy, setBusy] = useState(false)
+  const [photoBusy, setPhotoBusy] = useState(false)
+  const [photoError, setPhotoError] = useState<string | null>(null)
+  const fileRef = useRef<HTMLInputElement | null>(null)
 
   function update<K extends keyof Watch>(key: K, value: Watch[K]) {
     setW((prev) => ({ ...prev, [key]: value }))
+  }
+
+  async function handlePhotoSelect(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    e.target.value = '' // reset so same file can be re-picked
+    if (!file) return
+    const cfg = loadAuth()
+    if (!cfg) {
+      setPhotoError('Not authenticated.')
+      return
+    }
+    setPhotoBusy(true)
+    setPhotoError(null)
+    try {
+      const ext = file.name.split('.').pop()?.toLowerCase() ?? 'jpg'
+      const filename = `${watch.id}-${nanoid(6)}.${ext}`
+      const path = await uploadPhoto(cfg, filename, file)
+      setW((prev) => ({ ...prev, photos: [...(prev.photos ?? []), path] }))
+    } catch (err) {
+      setPhotoError((err as Error).message)
+    } finally {
+      setPhotoBusy(false)
+    }
+  }
+
+  function removePhoto(path: string) {
+    setW((prev) => ({
+      ...prev,
+      photos: (prev.photos ?? []).filter((p) => p !== path),
+    }))
   }
 
   function updateMoney(
@@ -490,6 +547,53 @@ function EditForm({ watch, onClose }: { watch: Watch; onClose: () => void }) {
           rows={3}
           className="mt-1 block w-full text-sm px-2 py-1.5 border border-border rounded-md bg-bg"
         />
+      </div>
+      <div className="mt-4">
+        <div className="flex items-center justify-between gap-2">
+          <label className="text-xs text-text-muted">
+            Photos {(w.photos?.length ?? 0) > 0 && `(${w.photos!.length})`}
+          </label>
+          <button
+            type="button"
+            onClick={() => fileRef.current?.click()}
+            disabled={photoBusy}
+            className="px-2 py-1 text-xs rounded-md border border-border inline-flex items-center gap-1 disabled:opacity-50"
+          >
+            <ImagePlus size={12} />
+            {photoBusy ? 'Uploading…' : 'Upload'}
+          </button>
+          <input
+            ref={fileRef}
+            type="file"
+            accept="image/*"
+            className="hidden"
+            onChange={handlePhotoSelect}
+          />
+        </div>
+        {photoError && (
+          <div className="text-[11px] text-danger mt-1">{photoError}</div>
+        )}
+        {(w.photos?.length ?? 0) > 0 && (
+          <div className="mt-2 grid grid-cols-3 sm:grid-cols-4 gap-2">
+            {w.photos!.map((p) => (
+              <div key={p} className="relative group">
+                <Photo
+                  path={p}
+                  className="w-full aspect-square object-cover rounded-md border border-border"
+                />
+                <button
+                  type="button"
+                  onClick={() => removePhoto(p)}
+                  className="absolute top-1 right-1 w-5 h-5 rounded-full bg-bg/90 border border-border text-text-muted hover:text-danger flex items-center justify-center"
+                  title="Remove photo"
+                  aria-label="Remove photo"
+                >
+                  <X size={11} />
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
       <div className="mt-4 flex justify-end gap-2">
         <button onClick={onClose} className="px-3 py-1.5 text-xs rounded-md border border-border">

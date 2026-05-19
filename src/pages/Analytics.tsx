@@ -319,6 +319,7 @@ function WearDistributionCard({
   wearLog: WearLogEntry[]
   watchColors: Map<string, string>
 }) {
+  const [includeInactive, setIncludeInactive] = useState(true)
   const counts = useMemo(() => {
     const m = new Map<string, number>()
     for (const e of wearLog) m.set(e.watchId, (m.get(e.watchId) ?? 0) + 1)
@@ -334,13 +335,27 @@ function WearDistributionCard({
           inactive,
         }
       })
+      .filter((c) => includeInactive || !c.inactive)
       .sort((a, b) => b.value - a.value)
-  }, [watches, wearLog, watchColors])
+  }, [watches, wearLog, watchColors, includeInactive])
 
   const totalWears = counts.reduce((s, c) => s + c.value, 0)
 
   return (
-    <Card title="Most worn">
+    <Card
+      title="Most worn"
+      action={
+        <label className="text-[11px] text-text-muted inline-flex items-center gap-1.5 cursor-pointer select-none">
+          <input
+            type="checkbox"
+            checked={includeInactive}
+            onChange={(e) => setIncludeInactive(e.target.checked)}
+            className="accent-accent"
+          />
+          Include sold/gifted
+        </label>
+      }
+    >
       {counts.length === 0 ? (
         <div className="text-xs text-text-muted">No wears in this window.</div>
       ) : (
@@ -674,8 +689,13 @@ function CostPerWearOverTimeCard({
   since: string | null
   watchColors: Map<string, string>
 }) {
+  const [includeInactive, setIncludeInactive] = useState(true)
   const { rows, eligible } = useMemo(() => {
-    const eligible = watches.filter((w) => (w.acquisitionPriceGbp ?? 0) > 0)
+    const eligible = watches.filter(
+      (w) =>
+        (w.acquisitionPriceGbp ?? 0) > 0 &&
+        (includeInactive || (w.status !== 'sold' && w.status !== 'gifted')),
+    )
     if (eligible.length === 0 || wearLog.length === 0) return { rows: [], eligible: [] }
 
     const sortedLog = [...wearLog].sort((a, b) => a.date.localeCompare(b.date))
@@ -721,11 +741,23 @@ function CostPerWearOverTimeCard({
       ? fullRows.filter((r) => String(r.month) >= sinceMonth)
       : fullRows
     return { rows: visible, eligible }
-  }, [watches, wearLog, since])
+  }, [watches, wearLog, since, includeInactive])
+
+  const inactiveToggle = (
+    <label className="text-[11px] text-text-muted inline-flex items-center gap-1.5 cursor-pointer select-none">
+      <input
+        type="checkbox"
+        checked={includeInactive}
+        onChange={(e) => setIncludeInactive(e.target.checked)}
+        className="accent-accent"
+      />
+      Include sold/gifted
+    </label>
+  )
 
   if (rows.length === 0 || eligible.length === 0) {
     return (
-      <Card title="Cost per wear over time">
+      <Card title="Cost per wear over time" action={inactiveToggle}>
         <div className="text-xs text-text-muted">
           Need acquisition prices and wear entries on at least one watch.
         </div>
@@ -734,7 +766,10 @@ function CostPerWearOverTimeCard({
   }
 
   return (
-    <Card title="Cost per wear over time · log scale · lower is better">
+    <Card
+      title="Cost per wear over time · log scale · lower is better"
+      action={inactiveToggle}
+    >
       <div className="flex-1 min-h-72">
         <ResponsiveContainer width="100%" height="100%">
           <LineChart data={rows} margin={{ left: 8, right: 16, top: 8, bottom: 8 }}>

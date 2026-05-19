@@ -1,12 +1,15 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { nanoid } from 'nanoid'
 import { Gate } from '../components/Gate'
 import { Card } from '../components/Card'
 import { Empty } from '../components/Empty'
+import { Photo } from '../components/Photo'
 import { useData, useDataContext } from '../hooks/useData'
 import type { Currency, WishlistItem } from '../types'
 import { formatMoney, todayIso, classNames, currencySymbols } from '../lib/utils'
-import { Plus, Trash2, Heart } from 'lucide-react'
+import { loadAuth } from '../lib/auth'
+import { uploadPhoto } from '../lib/storage'
+import { Plus, Trash2, Heart, Pencil, ImagePlus, X } from 'lucide-react'
 import { computeInsights } from '../lib/insights'
 
 const CURRENCIES: Currency[] = ['GBP', 'USD', 'EUR', 'CHF', 'JPY']
@@ -23,6 +26,7 @@ function WishlistInner() {
   const data = useData()
   const { mutate } = useDataContext()
   const [adding, setAdding] = useState(false)
+  const [editingId, setEditingId] = useState<string | null>(null)
 
   const insights = computeInsights(data.watches)
 
@@ -36,6 +40,19 @@ function WishlistInner() {
       message: `Add wishlist: ${wi.brand} ${wi.model}`,
     })
     setAdding(false)
+  }
+
+  async function update(id: string, patch: Omit<WishlistItem, 'id' | 'addedDate'>) {
+    await mutate(
+      (d) => ({
+        ...d,
+        wishlist: d.wishlist.map((w) =>
+          w.id === id ? { ...w, ...patch, id: w.id, addedDate: w.addedDate } : w,
+        ),
+      }),
+      { message: `Update wishlist: ${patch.brand} ${patch.model}` },
+    )
+    setEditingId(null)
   }
 
   async function remove(id: string) {
@@ -58,7 +75,7 @@ function WishlistInner() {
         </button>
       </div>
 
-      {adding && <AddForm onCancel={() => setAdding(false)} onSubmit={add} />}
+      {adding && <Form onCancel={() => setAdding(false)} onSubmit={add} />}
 
       {insights.gaps.length > 0 && (
         <Card title="Suggested by gap analysis">
@@ -80,50 +97,77 @@ function WishlistInner() {
         <Empty title="No wants yet" body="Add watches you're hunting for and tag them with priority." />
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          {sorted.map((w) => (
-            <Card key={w.id}>
-              <div className="flex items-start justify-between gap-2">
-                <div>
-                  <div className="font-medium text-sm">{w.brand}</div>
-                  <div className="text-xs text-text-muted">
-                    {w.model}
-                    {w.reference && ` · ${w.reference}`}
+          {sorted.map((w) =>
+            editingId === w.id ? (
+              <Form
+                key={w.id}
+                initial={w}
+                onCancel={() => setEditingId(null)}
+                onSubmit={(patch) => update(w.id, patch)}
+              />
+            ) : (
+              <Card key={w.id}>
+                <div className="flex items-start justify-between gap-2">
+                  <div className="flex items-start gap-3 min-w-0">
+                    {w.imageUrl && (
+                      <Photo
+                        path={w.imageUrl}
+                        className="w-14 h-14 rounded-md object-cover border border-border shrink-0"
+                      />
+                    )}
+                    <div className="min-w-0">
+                      <div className="font-medium text-sm truncate">{w.brand}</div>
+                      <div className="text-xs text-text-muted truncate">
+                        {w.model}
+                        {w.reference && ` · ${w.reference}`}
+                      </div>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-1.5 shrink-0">
+                    <Priority value={w.priority} />
+                    <button
+                      onClick={() => setEditingId(w.id)}
+                      className="text-text-subtle hover:text-text"
+                      title="Edit"
+                      aria-label="Edit wishlist item"
+                    >
+                      <Pencil size={14} />
+                    </button>
+                    <button
+                      onClick={() => void remove(w.id)}
+                      className="text-text-subtle hover:text-danger"
+                      title="Remove"
+                      aria-label="Remove wishlist item"
+                    >
+                      <Trash2 size={14} />
+                    </button>
                   </div>
                 </div>
-                <div className="flex items-center gap-1.5">
-                  <Priority value={w.priority} />
-                  <button
-                    onClick={() => void remove(w.id)}
-                    className="text-text-subtle hover:text-danger"
-                  >
-                    <Trash2 size={14} />
-                  </button>
-                </div>
-              </div>
-              {w.targetPrice && (
-                <div className="text-xs text-text-muted mt-2">
-                  Target: {formatMoney(w.targetPrice)}
-                </div>
-              )}
-              {w.notes && <div className="text-xs mt-2 whitespace-pre-wrap">{w.notes}</div>}
-              {w.links && w.links.length > 0 && (
-                <div className="text-xs mt-2 space-y-0.5">
-                  {w.links.map((l, i) => (
-                    <div key={i}>
-                      <a
-                        href={l}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="text-accent underline truncate block"
-                      >
-                        {l}
-                      </a>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </Card>
-          ))}
+                {w.targetPrice && (
+                  <div className="text-xs text-text-muted mt-2">
+                    Target: {formatMoney(w.targetPrice)}
+                  </div>
+                )}
+                {w.notes && <div className="text-xs mt-2 whitespace-pre-wrap">{w.notes}</div>}
+                {w.links && w.links.length > 0 && (
+                  <div className="text-xs mt-2 space-y-0.5">
+                    {w.links.map((l, i) => (
+                      <div key={i}>
+                        <a
+                          href={l}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="text-accent underline truncate block"
+                        >
+                          {l}
+                        </a>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </Card>
+            ),
+          )}
         </div>
       )}
     </div>
@@ -146,24 +190,58 @@ function Priority({ value }: { value: number }) {
   )
 }
 
-function AddForm({
+function Form({
+  initial,
   onCancel,
   onSubmit,
 }: {
+  initial?: WishlistItem
   onCancel: () => void
   onSubmit: (item: Omit<WishlistItem, 'id' | 'addedDate'>) => Promise<void>
 }) {
-  const [brand, setBrand] = useState('')
-  const [model, setModel] = useState('')
-  const [reference, setReference] = useState('')
-  const [priority, setPriority] = useState<1 | 2 | 3 | 4 | 5>(3)
-  const [currency, setCurrency] = useState<Currency>('GBP')
-  const [amount, setAmount] = useState('')
-  const [notes, setNotes] = useState('')
+  const [brand, setBrand] = useState(initial?.brand ?? '')
+  const [model, setModel] = useState(initial?.model ?? '')
+  const [reference, setReference] = useState(initial?.reference ?? '')
+  const [priority, setPriority] = useState<1 | 2 | 3 | 4 | 5>(initial?.priority ?? 3)
+  const [currency, setCurrency] = useState<Currency>(
+    initial?.targetPrice?.currency ?? 'GBP',
+  )
+  const [amount, setAmount] = useState(
+    initial?.targetPrice ? String(initial.targetPrice.amount) : '',
+  )
+  const [notes, setNotes] = useState(initial?.notes ?? '')
+  const [imageUrl, setImageUrl] = useState<string | undefined>(initial?.imageUrl)
   const [busy, setBusy] = useState(false)
+  const [photoBusy, setPhotoBusy] = useState(false)
+  const [photoError, setPhotoError] = useState<string | null>(null)
+  const fileRef = useRef<HTMLInputElement | null>(null)
+
+  async function handlePhotoSelect(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    e.target.value = ''
+    if (!file) return
+    const cfg = loadAuth()
+    if (!cfg) {
+      setPhotoError('Not authenticated.')
+      return
+    }
+    setPhotoBusy(true)
+    setPhotoError(null)
+    try {
+      const ext = file.name.split('.').pop()?.toLowerCase() ?? 'jpg'
+      const idSlug = initial?.id ?? 'wishlist'
+      const filename = `${idSlug}-${nanoid(6)}.${ext}`
+      const path = await uploadPhoto(cfg, filename, file)
+      setImageUrl(path)
+    } catch (err) {
+      setPhotoError((err as Error).message)
+    } finally {
+      setPhotoBusy(false)
+    }
+  }
 
   return (
-    <Card title="Add wishlist item">
+    <Card title={initial ? 'Edit wishlist item' : 'Add wishlist item'}>
       <form
         onSubmit={async (e) => {
           e.preventDefault()
@@ -179,6 +257,11 @@ function AddForm({
                 ? { amount: Number(amount), currency }
                 : undefined,
               notes: notes.trim() || undefined,
+              imageUrl,
+              // Preserve fields not exposed in the form
+              links: initial?.links,
+              targetPriceGbp: initial?.targetPriceGbp,
+              category: initial?.category,
             })
           } finally {
             setBusy(false)
@@ -244,10 +327,54 @@ function AddForm({
         <textarea
           value={notes}
           onChange={(e) => setNotes(e.target.value)}
-          placeholder="Notes / links (one per line)"
+          placeholder="Notes"
           rows={2}
           className="sm:col-span-2 px-2 py-1.5 text-sm border border-border rounded-md bg-bg"
         />
+        <div className="sm:col-span-2 flex items-start gap-3">
+          {imageUrl ? (
+            <div className="relative">
+              <Photo
+                path={imageUrl}
+                className="w-20 h-20 rounded-md object-cover border border-border"
+              />
+              <button
+                type="button"
+                onClick={() => setImageUrl(undefined)}
+                className="absolute top-1 right-1 w-5 h-5 rounded-full bg-bg/90 border border-border text-text-muted hover:text-danger flex items-center justify-center"
+                title="Remove photo"
+                aria-label="Remove photo"
+              >
+                <X size={11} />
+              </button>
+            </div>
+          ) : (
+            <div className="w-20 h-20 rounded-md border border-dashed border-border bg-surface-2 flex items-center justify-center text-text-subtle text-[10px]">
+              no photo
+            </div>
+          )}
+          <div className="flex flex-col gap-1">
+            <button
+              type="button"
+              onClick={() => fileRef.current?.click()}
+              disabled={photoBusy}
+              className="px-2 py-1 text-xs rounded-md border border-border inline-flex items-center gap-1 disabled:opacity-50"
+            >
+              <ImagePlus size={12} />
+              {photoBusy ? 'Uploading…' : imageUrl ? 'Replace photo' : 'Upload photo'}
+            </button>
+            {photoError && (
+              <div className="text-[11px] text-danger">{photoError}</div>
+            )}
+            <input
+              ref={fileRef}
+              type="file"
+              accept="image/*"
+              className="hidden"
+              onChange={handlePhotoSelect}
+            />
+          </div>
+        </div>
         <div className="sm:col-span-2 flex justify-end gap-2">
           <button
             type="button"
