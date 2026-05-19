@@ -118,8 +118,14 @@ export function CalendarHeatmap({ watches, wearLog, watchColors }: Props) {
         </span>
       </div>
 
-      <div className="overflow-x-auto">
-        <svg width={width} height={height} className="block">
+      <div className="w-full">
+        <svg
+          viewBox={`0 0 ${width} ${height}`}
+          width="100%"
+          height="auto"
+          preserveAspectRatio="xMidYMid meet"
+          className="block max-w-full"
+        >
           {/* Day-of-week labels */}
           {DAY_LABELS.map((lbl, i) =>
             lbl ? (

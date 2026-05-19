@@ -33,6 +33,11 @@ import { MapContainer, TileLayer, CircleMarker, Tooltip as LeafletTooltip } from
 import 'leaflet/dist/leaflet.css'
 import { Gate } from '../components/Gate'
 import { Card } from '../components/Card'
+import {
+  CollapseProvider,
+  CollapseToolbar,
+  CollapsibleCard,
+} from '../components/Collapse'
 import { Empty } from '../components/Empty'
 import { CalendarHeatmap } from '../components/CalendarHeatmap'
 import { TimeRangeFilter } from '../components/TimeRangeFilter'
@@ -107,51 +112,58 @@ function AnalyticsInner() {
         />
       </Card>
 
-      {/* Filtered by timeframe */}
-      <WatchShareCard
-        watches={data.watches}
-        wearLog={filteredWearLog}
-        watchColors={watchColors}
-        rangeLabel={rangeLabel(range)}
-      />
+      <CollapseProvider>
+        <div className="flex items-center justify-between gap-2">
+          <div className="text-xs text-text-muted">Drill-down charts</div>
+          <CollapseToolbar />
+        </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        <WearDistributionCard
+        {/* Filtered by timeframe */}
+        <WatchShareCard
           watches={data.watches}
           wearLog={filteredWearLog}
           watchColors={watchColors}
+          rangeLabel={rangeLabel(range)}
         />
-        <RotationDiversityCard wearLog={filteredWearLog} />
-        {/* CPW line chart — window-scaled X axis, cumulative wears use full history */}
-        <CostPerWearOverTimeCard
+
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          <WearDistributionCard
+            watches={data.watches}
+            wearLog={filteredWearLog}
+            watchColors={watchColors}
+          />
+          <RotationDiversityCard wearLog={filteredWearLog} />
+          {/* CPW line chart — window-scaled X axis, cumulative wears use full history */}
+          <CostPerWearOverTimeCard
+            watches={data.watches}
+            wearLog={data.wearLog}
+            since={since}
+            watchColors={watchColors}
+          />
+          <WearsVsSpendCard
+            watches={data.watches}
+            wearLog={data.wearLog}
+            watchColors={watchColors}
+          />
+          <CashFlowCard watches={data.watches} />
+          <WatchFlowCard watches={data.watches} />
+        </div>
+
+        <WatchYearHeatmapCard
           watches={data.watches}
           wearLog={data.wearLog}
-          since={since}
           watchColors={watchColors}
         />
-        <WearsVsSpendCard
+
+        <TravelCompanionCard
           watches={data.watches}
           wearLog={data.wearLog}
           watchColors={watchColors}
         />
-        <CashFlowCard watches={data.watches} />
-        <WatchFlowCard watches={data.watches} />
-      </div>
 
-      <WatchYearHeatmapCard
-        watches={data.watches}
-        wearLog={data.wearLog}
-        watchColors={watchColors}
-      />
-
-      <TravelCompanionCard
-        watches={data.watches}
-        wearLog={data.wearLog}
-        watchColors={watchColors}
-      />
-
-      {/* Always all-time */}
-      <TravelMapCard wearLog={data.wearLog} />
+        {/* Always all-time */}
+        <TravelMapCard wearLog={data.wearLog} />
+      </CollapseProvider>
     </div>
   )
 }
@@ -205,14 +217,29 @@ function HeadlineStrip({
     value,
     sub,
     watch,
+    explanation,
   }: {
     label: string
     value: string
     sub?: string
     watch?: Watch
+    explanation?: string
   }) => (
-    <div className="border border-border rounded-lg px-3 py-2 bg-surface">
-      <div className="text-[10px] uppercase tracking-wide text-text-muted">{label}</div>
+    <div
+      className="border border-border rounded-lg px-3 py-2 bg-surface"
+      title={explanation}
+    >
+      <div className="text-[10px] uppercase tracking-wide text-text-muted flex items-center gap-1">
+        <span>{label}</span>
+        {explanation && (
+          <span
+            className="inline-flex items-center justify-center w-3 h-3 rounded-full border border-text-subtle text-text-subtle text-[8px] leading-none cursor-help"
+            aria-label={explanation}
+          >
+            i
+          </span>
+        )}
+      </div>
       <div className="mt-0.5 flex items-baseline gap-1.5">
         <span className="text-lg font-semibold tabular-nums">{value}</span>
         {watch && (
@@ -238,14 +265,30 @@ function HeadlineStrip({
         <Chip
           label={`Rotation score (${rangeLabel})`}
           value={`${rotation.score}/100`}
-          sub={`across ${rotation.uniqueWatches} watch${rotation.uniqueWatches === 1 ? '' : 'es'}`}
+          sub={`100 = perfectly even · 0 = one watch`}
+          explanation={
+            `Normalized Shannon entropy of your wear distribution. ` +
+            `100 means you wore every watch in rotation an equal number ` +
+            `of times. 0 means one single watch was worn every day. ` +
+            `Computed from ${rotation.totalWears} wears across ` +
+            `${rotation.uniqueWatches} watch${rotation.uniqueWatches === 1 ? '' : 'es'} ` +
+            `within the ${rangeLabel} window.`
+          }
         />
       )}
       {rotation.score != null && (
         <Chip
           label={`Effective rotation (${rangeLabel})`}
           value={rotation.effective.toFixed(1)}
-          sub="equally-weighted watches"
+          sub="≈ watches in even use"
+          explanation={
+            `If your wear pattern were a perfectly even rotation between ` +
+            `N watches, you'd see this many. So ${rotation.effective.toFixed(1)} ` +
+            `means your usage spreads as if you rotate ${rotation.effective.toFixed(1)} ` +
+            `watches evenly — lower than ${rotation.uniqueWatches} (the actual ` +
+            `unique watches worn) when one or two pieces dominate. ` +
+            `Mathematically: e^entropy.`
+          }
         />
       )}
       {topStreak && (
@@ -258,6 +301,7 @@ function HeadlineStrip({
               ? `from ${fmt(topStreak.longestStreakRange.from)}`
               : undefined
           }
+          explanation="Longest run of consecutive days the same watch was worn (all-time, across every watch in your collection)."
         />
       )}
       {mostStale && (
@@ -270,6 +314,7 @@ function HeadlineStrip({
           }
           watch={watchOf(mostStale.watchId)}
           sub={mostStale.lastWorn ? `last on ${fmt(mostStale.lastWorn)}` : undefined}
+          explanation="Currently-owned watch that's gone the longest without being worn. Sold and gifted-out watches aren't considered."
         />
       )}
     </div>
@@ -307,7 +352,7 @@ function WearDistributionCard({
   const totalWears = counts.reduce((s, c) => s + c.value, 0)
 
   return (
-    <Card title="Most worn">
+    <CollapsibleCard id="most-worn" title="Most worn">
       {counts.length === 0 ? (
         <div className="text-xs text-text-muted">No wears in this window.</div>
       ) : (
@@ -348,7 +393,7 @@ function WearDistributionCard({
           </ResponsiveContainer>
         </div>
       )}
-    </Card>
+    </CollapsibleCard>
   )
 }
 
@@ -396,7 +441,7 @@ function CashFlowCard({ watches }: { watches: Watch[] }) {
   const hasAny = rows.some((r) => r.spend > 0 || r.proceedsAbs > 0)
 
   return (
-    <Card title="Cash flow per year (GBP) · purchases above, sales below">
+    <CollapsibleCard id="cash-flow" title="Cash flow per year (GBP) · purchases above, sales below">
       {!hasAny ? (
         <div className="text-xs text-text-muted">
           No priced acquisitions or sales recorded.
@@ -440,7 +485,7 @@ function CashFlowCard({ watches }: { watches: Watch[] }) {
           </ResponsiveContainer>
         </div>
       )}
-    </Card>
+    </CollapsibleCard>
   )
 }
 
@@ -527,7 +572,7 @@ function WatchFlowCard({ watches }: { watches: Watch[] }) {
   const C_GIFT = '#7c3aed'
 
   return (
-    <Card title="Watches in vs out per year · bought/gifted above, sold/gifted below">
+    <CollapsibleCard id="watch-flow" title="Watches in vs out per year · bought/gifted above, sold/gifted below">
       {!hasAny ? (
         <div className="text-xs text-text-muted">
           No acquisition or disposal dates recorded.
@@ -623,7 +668,7 @@ function WatchFlowCard({ watches }: { watches: Watch[] }) {
           )}
         </>
       )}
-    </Card>
+    </CollapsibleCard>
   )
 }
 
@@ -692,16 +737,16 @@ function CostPerWearOverTimeCard({
 
   if (rows.length === 0 || eligible.length === 0) {
     return (
-      <Card title="Cost per wear over time">
+      <CollapsibleCard id="cpw" title="Cost per wear over time">
         <div className="text-xs text-text-muted">
           Need acquisition prices and wear entries on at least one watch.
         </div>
-      </Card>
+      </CollapsibleCard>
     )
   }
 
   return (
-    <Card title="Cost per wear over time · log scale · lower is better">
+    <CollapsibleCard id="cpw" title="Cost per wear over time · log scale · lower is better">
       <div className="flex-1 min-h-72">
         <ResponsiveContainer width="100%" height="100%">
           <LineChart data={rows} margin={{ left: 8, right: 16, top: 8, bottom: 8 }}>
@@ -764,7 +809,7 @@ function CostPerWearOverTimeCard({
           )
         })}
       </div>
-    </Card>
+    </CollapsibleCard>
   )
 }
 
@@ -801,7 +846,7 @@ function WearsVsSpendCard({
   }, [watches, wearLog, watchColors])
 
   return (
-    <Card title="Wears vs spend · log scale on both axes">
+    <CollapsibleCard id="wears-vs-spend" title="Wears vs spend · log scale on both axes">
       {rows.length === 0 ? (
         <div className="text-xs text-text-muted">
           Add acquisition prices to your watches to see this.
@@ -875,7 +920,7 @@ function WearsVsSpendCard({
           </ResponsiveContainer>
         </div>
       )}
-    </Card>
+    </CollapsibleCard>
   )
 }
 
@@ -898,7 +943,7 @@ function RotationDiversityCard({ wearLog }: { wearLog: WearLogEntry[] }) {
       : points.reduce((s, p) => s + p.uniqueWatches, 0) / points.length
 
   return (
-    <Card title={`Rotation diversity (avg ${avgUnique.toFixed(1)} watches/month)`}>
+    <CollapsibleCard id="rotation-diversity" title={`Rotation diversity (avg ${avgUnique.toFixed(1)} watches/month)`}>
       {points.length === 0 ? (
         <div className="text-xs text-text-muted">No wear data in this window.</div>
       ) : (
@@ -921,7 +966,7 @@ function RotationDiversityCard({ wearLog }: { wearLog: WearLogEntry[] }) {
           </ResponsiveContainer>
         </div>
       )}
-    </Card>
+    </CollapsibleCard>
   )
 }
 
@@ -987,9 +1032,9 @@ function WatchShareCard({
 
   if (rows.length === 0 || rankedWatches.length === 0) {
     return (
-      <Card title={`Watch share over time (${rangeLabel})`}>
+      <CollapsibleCard id="watch-share" title={`Watch share over time (${rangeLabel})`}>
         <div className="text-xs text-text-muted">No wear data in this window.</div>
-      </Card>
+      </CollapsibleCard>
     )
   }
 
@@ -998,7 +1043,7 @@ function WatchShareCard({
   const watchById = new Map(rankedWatches.map((w) => [w.id, w]))
 
   return (
-    <Card title={`Watch share over time · monthly · ranked per-bar (${rangeLabel})`}>
+    <CollapsibleCard id="watch-share" title={`Watch share over time · monthly · ranked per-bar (${rangeLabel})`}>
       <div className="h-72 w-full">
         <ResponsiveContainer width="100%" height="100%">
           <BarChart data={rows} barCategoryGap={1}>
@@ -1094,7 +1139,7 @@ function WatchShareCard({
           )
         })}
       </div>
-    </Card>
+    </CollapsibleCard>
   )
 }
 
@@ -1164,9 +1209,9 @@ function WatchYearHeatmapCard({
 
   if (rows.length === 0) {
     return (
-      <Card title="Wear heatmap · watch × year">
+      <CollapsibleCard id="watch-year-heatmap" title="Wear heatmap · watch × year">
         <div className="text-xs text-text-muted">No wear data.</div>
-      </Card>
+      </CollapsibleCard>
     )
   }
 
@@ -1177,7 +1222,7 @@ function WatchYearHeatmapCard({
   const gridTemplate = `${LABEL_W}px repeat(${years.length}, minmax(${narrow ? 6 : 8}px, 1fr)) ${TOTAL_W}px`
 
   return (
-    <Card title="Wear heatmap · watch × year" padding={false}>
+    <CollapsibleCard id="watch-year-heatmap" title="Wear heatmap · watch × year" padding={false}>
       <div className="p-3 w-full overflow-x-auto">
         {/* Year header */}
         <div
@@ -1253,7 +1298,7 @@ function WatchYearHeatmapCard({
           )
         })}
       </div>
-    </Card>
+    </CollapsibleCard>
   )
 }
 
@@ -1303,7 +1348,7 @@ function TravelCompanionCard({
   }, [watches, wearLog, watchColors])
 
   return (
-    <Card title="Travel companions · home (Amersham / London / Toronto / Kingston) vs away">
+    <CollapsibleCard id="travel-companions" title="Travel companions · home (Amersham / London / Toronto / Kingston) vs away">
       {rows.length === 0 ? (
         <div className="text-xs text-text-muted">No location data.</div>
       ) : (
@@ -1352,7 +1397,7 @@ function TravelCompanionCard({
           Slate = Away
         </span>
       </div>
-    </Card>
+    </CollapsibleCard>
   )
 }
 
@@ -1410,7 +1455,7 @@ function TravelMapCard({ wearLog }: { wearLog: WearLogEntry[] }) {
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-[2fr_1fr] gap-4">
-      <Card title="Travel map" padding={false}>
+      <CollapsibleCard id="travel-map" title="Travel map" padding={false}>
         <div className="flex-1 min-h-80 w-full relative">
           {unresolvedCount > 0 && (
             <div className="absolute top-2 right-2 z-[1000] bg-bg/90 px-2 py-1 rounded text-[11px] text-text-muted border border-border">
@@ -1455,8 +1500,8 @@ function TravelMapCard({ wearLog }: { wearLog: WearLogEntry[] }) {
             })}
           </MapContainer>
         </div>
-      </Card>
-      <Card title="Top locations">
+      </CollapsibleCard>
+      <CollapsibleCard id="top-locations" title="Top locations">
         {tableRows.length === 0 ? (
           <div className="text-xs text-text-muted">No locations.</div>
         ) : (
@@ -1477,7 +1522,7 @@ function TravelMapCard({ wearLog }: { wearLog: WearLogEntry[] }) {
             ))}
           </ul>
         )}
-      </Card>
+      </CollapsibleCard>
     </div>
   )
 }
