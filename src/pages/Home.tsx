@@ -42,6 +42,20 @@ function HomeInner() {
     const prev = lastWornByWatch.get(e.watchId)
     if (!prev || e.date > prev) lastWornByWatch.set(e.watchId, e.date)
   }
+
+  // Dormant capital: paid-for owned watches unworn 90+ days (or never)
+  const DORMANT_DAYS = 90
+  let dormantValue = 0
+  let dormantCount = 0
+  for (const w of paid) {
+    if (!w.currentValueGbp) continue
+    const last = lastWornByWatch.get(w.id)
+    const days = last ? daysSince(last) : Infinity
+    if (days >= DORMANT_DAYS) {
+      dormantValue += w.currentValueGbp
+      dormantCount += 1
+    }
+  }
   const stalest = [...owned]
     .map((w) => ({ w, last: lastWornByWatch.get(w.id) ?? null }))
     .sort((a, b) => {
@@ -123,7 +137,7 @@ function HomeInner() {
         )}
       </Link>
 
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
         <Stat label="Owned" value={owned.length} sub={`${data.watches.length} total tracked`} />
         <Stat
           label="Collection value"
@@ -171,6 +185,15 @@ function HomeInner() {
             )
           }
           sub={`${sold.length} sold`}
+        />
+        <Stat
+          label="Dormant capital"
+          value={dormantValue > 0 ? formatGbp(dormantValue) : '—'}
+          sub={
+            dormantCount > 0
+              ? `${dormantCount} owned watch${dormantCount === 1 ? '' : 'es'} unworn 90+ days`
+              : 'nothing untouched for 90+ days'
+          }
         />
       </div>
 

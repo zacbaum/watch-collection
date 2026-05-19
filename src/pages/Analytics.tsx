@@ -33,11 +33,6 @@ import { MapContainer, TileLayer, CircleMarker, Tooltip as LeafletTooltip } from
 import 'leaflet/dist/leaflet.css'
 import { Gate } from '../components/Gate'
 import { Card } from '../components/Card'
-import {
-  CollapseProvider,
-  CollapseToolbar,
-  CollapsibleCard,
-} from '../components/Collapse'
 import { Empty } from '../components/Empty'
 import { CalendarHeatmap } from '../components/CalendarHeatmap'
 import { TimeRangeFilter } from '../components/TimeRangeFilter'
@@ -112,58 +107,51 @@ function AnalyticsInner() {
         />
       </Card>
 
-      <CollapseProvider>
-        <div className="flex items-center justify-between gap-2">
-          <div className="text-xs text-text-muted">Drill-down charts</div>
-          <CollapseToolbar />
-        </div>
+      {/* Filtered by timeframe */}
+      <WatchShareCard
+        watches={data.watches}
+        wearLog={filteredWearLog}
+        watchColors={watchColors}
+        rangeLabel={rangeLabel(range)}
+      />
 
-        {/* Filtered by timeframe */}
-        <WatchShareCard
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <WearDistributionCard
           watches={data.watches}
           wearLog={filteredWearLog}
           watchColors={watchColors}
-          rangeLabel={rangeLabel(range)}
         />
-
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-          <WearDistributionCard
-            watches={data.watches}
-            wearLog={filteredWearLog}
-            watchColors={watchColors}
-          />
-          <RotationDiversityCard wearLog={filteredWearLog} />
-          {/* CPW line chart — window-scaled X axis, cumulative wears use full history */}
-          <CostPerWearOverTimeCard
-            watches={data.watches}
-            wearLog={data.wearLog}
-            since={since}
-            watchColors={watchColors}
-          />
-          <WearsVsSpendCard
-            watches={data.watches}
-            wearLog={data.wearLog}
-            watchColors={watchColors}
-          />
-          <CashFlowCard watches={data.watches} />
-          <WatchFlowCard watches={data.watches} />
-        </div>
-
-        <WatchYearHeatmapCard
+        <RotationDiversityCard wearLog={filteredWearLog} />
+        {/* CPW line chart — window-scaled X axis, cumulative wears use full history */}
+        <CostPerWearOverTimeCard
+          watches={data.watches}
+          wearLog={data.wearLog}
+          since={since}
+          watchColors={watchColors}
+        />
+        <WearsVsSpendCard
           watches={data.watches}
           wearLog={data.wearLog}
           watchColors={watchColors}
         />
+        <CashFlowCard watches={data.watches} />
+        <WatchFlowCard watches={data.watches} />
+      </div>
 
-        <TravelCompanionCard
-          watches={data.watches}
-          wearLog={data.wearLog}
-          watchColors={watchColors}
-        />
+      <WatchYearHeatmapCard
+        watches={data.watches}
+        wearLog={data.wearLog}
+        watchColors={watchColors}
+      />
 
-        {/* Always all-time */}
-        <TravelMapCard wearLog={data.wearLog} />
-      </CollapseProvider>
+      <TravelCompanionCard
+        watches={data.watches}
+        wearLog={data.wearLog}
+        watchColors={watchColors}
+      />
+
+      {/* Always all-time */}
+      <TravelMapCard wearLog={data.wearLog} />
     </div>
   )
 }
@@ -352,7 +340,7 @@ function WearDistributionCard({
   const totalWears = counts.reduce((s, c) => s + c.value, 0)
 
   return (
-    <CollapsibleCard id="most-worn" title="Most worn">
+    <Card title="Most worn">
       {counts.length === 0 ? (
         <div className="text-xs text-text-muted">No wears in this window.</div>
       ) : (
@@ -393,7 +381,7 @@ function WearDistributionCard({
           </ResponsiveContainer>
         </div>
       )}
-    </CollapsibleCard>
+    </Card>
   )
 }
 
@@ -441,7 +429,7 @@ function CashFlowCard({ watches }: { watches: Watch[] }) {
   const hasAny = rows.some((r) => r.spend > 0 || r.proceedsAbs > 0)
 
   return (
-    <CollapsibleCard id="cash-flow" title="Cash flow per year (GBP) · purchases above, sales below">
+    <Card title="Cash flow per year (GBP) · purchases above, sales below">
       {!hasAny ? (
         <div className="text-xs text-text-muted">
           No priced acquisitions or sales recorded.
@@ -485,7 +473,7 @@ function CashFlowCard({ watches }: { watches: Watch[] }) {
           </ResponsiveContainer>
         </div>
       )}
-    </CollapsibleCard>
+    </Card>
   )
 }
 
@@ -572,7 +560,7 @@ function WatchFlowCard({ watches }: { watches: Watch[] }) {
   const C_GIFT = '#7c3aed'
 
   return (
-    <CollapsibleCard id="watch-flow" title="Watches in vs out per year · bought/gifted above, sold/gifted below">
+    <Card title="Watches in vs out per year · bought/gifted above, sold/gifted below">
       {!hasAny ? (
         <div className="text-xs text-text-muted">
           No acquisition or disposal dates recorded.
@@ -668,7 +656,7 @@ function WatchFlowCard({ watches }: { watches: Watch[] }) {
           )}
         </>
       )}
-    </CollapsibleCard>
+    </Card>
   )
 }
 
@@ -737,16 +725,16 @@ function CostPerWearOverTimeCard({
 
   if (rows.length === 0 || eligible.length === 0) {
     return (
-      <CollapsibleCard id="cpw" title="Cost per wear over time">
+      <Card title="Cost per wear over time">
         <div className="text-xs text-text-muted">
           Need acquisition prices and wear entries on at least one watch.
         </div>
-      </CollapsibleCard>
+      </Card>
     )
   }
 
   return (
-    <CollapsibleCard id="cpw" title="Cost per wear over time · log scale · lower is better">
+    <Card title="Cost per wear over time · log scale · lower is better">
       <div className="flex-1 min-h-72">
         <ResponsiveContainer width="100%" height="100%">
           <LineChart data={rows} margin={{ left: 8, right: 16, top: 8, bottom: 8 }}>
@@ -809,7 +797,7 @@ function CostPerWearOverTimeCard({
           )
         })}
       </div>
-    </CollapsibleCard>
+    </Card>
   )
 }
 
@@ -846,7 +834,7 @@ function WearsVsSpendCard({
   }, [watches, wearLog, watchColors])
 
   return (
-    <CollapsibleCard id="wears-vs-spend" title="Wears vs spend · log scale on both axes">
+    <Card title="Wears vs spend · log scale on both axes">
       {rows.length === 0 ? (
         <div className="text-xs text-text-muted">
           Add acquisition prices to your watches to see this.
@@ -920,7 +908,7 @@ function WearsVsSpendCard({
           </ResponsiveContainer>
         </div>
       )}
-    </CollapsibleCard>
+    </Card>
   )
 }
 
@@ -943,7 +931,7 @@ function RotationDiversityCard({ wearLog }: { wearLog: WearLogEntry[] }) {
       : points.reduce((s, p) => s + p.uniqueWatches, 0) / points.length
 
   return (
-    <CollapsibleCard id="rotation-diversity" title={`Rotation diversity (avg ${avgUnique.toFixed(1)} watches/month)`}>
+    <Card title={`Rotation diversity (avg ${avgUnique.toFixed(1)} watches/month)`}>
       {points.length === 0 ? (
         <div className="text-xs text-text-muted">No wear data in this window.</div>
       ) : (
@@ -966,7 +954,7 @@ function RotationDiversityCard({ wearLog }: { wearLog: WearLogEntry[] }) {
           </ResponsiveContainer>
         </div>
       )}
-    </CollapsibleCard>
+    </Card>
   )
 }
 
@@ -1032,9 +1020,9 @@ function WatchShareCard({
 
   if (rows.length === 0 || rankedWatches.length === 0) {
     return (
-      <CollapsibleCard id="watch-share" title={`Watch share over time (${rangeLabel})`}>
+      <Card title={`Watch share over time (${rangeLabel})`}>
         <div className="text-xs text-text-muted">No wear data in this window.</div>
-      </CollapsibleCard>
+      </Card>
     )
   }
 
@@ -1043,7 +1031,7 @@ function WatchShareCard({
   const watchById = new Map(rankedWatches.map((w) => [w.id, w]))
 
   return (
-    <CollapsibleCard id="watch-share" title={`Watch share over time · monthly · ranked per-bar (${rangeLabel})`}>
+    <Card title={`Watch share over time · monthly · ranked per-bar (${rangeLabel})`}>
       <div className="h-72 w-full">
         <ResponsiveContainer width="100%" height="100%">
           <BarChart data={rows} barCategoryGap={1}>
@@ -1139,7 +1127,7 @@ function WatchShareCard({
           )
         })}
       </div>
-    </CollapsibleCard>
+    </Card>
   )
 }
 
@@ -1209,9 +1197,9 @@ function WatchYearHeatmapCard({
 
   if (rows.length === 0) {
     return (
-      <CollapsibleCard id="watch-year-heatmap" title="Wear heatmap · watch × year">
+      <Card title="Wear heatmap · watch × year">
         <div className="text-xs text-text-muted">No wear data.</div>
-      </CollapsibleCard>
+      </Card>
     )
   }
 
@@ -1222,7 +1210,7 @@ function WatchYearHeatmapCard({
   const gridTemplate = `${LABEL_W}px repeat(${years.length}, minmax(${narrow ? 6 : 8}px, 1fr)) ${TOTAL_W}px`
 
   return (
-    <CollapsibleCard id="watch-year-heatmap" title="Wear heatmap · watch × year" padding={false}>
+    <Card title="Wear heatmap · watch × year" padding={false}>
       <div className="p-3 w-full overflow-x-auto">
         {/* Year header */}
         <div
@@ -1298,7 +1286,7 @@ function WatchYearHeatmapCard({
           )
         })}
       </div>
-    </CollapsibleCard>
+    </Card>
   )
 }
 
@@ -1348,7 +1336,7 @@ function TravelCompanionCard({
   }, [watches, wearLog, watchColors])
 
   return (
-    <CollapsibleCard id="travel-companions" title="Travel companions · home (Amersham / London / Toronto / Kingston) vs away">
+    <Card title="Travel companions · home (Amersham / London / Toronto / Kingston) vs away">
       {rows.length === 0 ? (
         <div className="text-xs text-text-muted">No location data.</div>
       ) : (
@@ -1397,7 +1385,7 @@ function TravelCompanionCard({
           Slate = Away
         </span>
       </div>
-    </CollapsibleCard>
+    </Card>
   )
 }
 
@@ -1455,7 +1443,7 @@ function TravelMapCard({ wearLog }: { wearLog: WearLogEntry[] }) {
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-[2fr_1fr] gap-4">
-      <CollapsibleCard id="travel-map" title="Travel map" padding={false}>
+      <Card title="Travel map" padding={false}>
         <div className="flex-1 min-h-80 w-full relative">
           {unresolvedCount > 0 && (
             <div className="absolute top-2 right-2 z-[1000] bg-bg/90 px-2 py-1 rounded text-[11px] text-text-muted border border-border">
@@ -1500,8 +1488,8 @@ function TravelMapCard({ wearLog }: { wearLog: WearLogEntry[] }) {
             })}
           </MapContainer>
         </div>
-      </CollapsibleCard>
-      <CollapsibleCard id="top-locations" title="Top locations">
+      </Card>
+      <Card title="Top locations">
         {tableRows.length === 0 ? (
           <div className="text-xs text-text-muted">No locations.</div>
         ) : (
@@ -1522,7 +1510,7 @@ function TravelMapCard({ wearLog }: { wearLog: WearLogEntry[] }) {
             ))}
           </ul>
         )}
-      </CollapsibleCard>
+      </Card>
     </div>
   )
 }
