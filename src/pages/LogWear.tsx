@@ -37,6 +37,33 @@ function LogWearInner() {
   const [busy, setBusy] = useState(false)
   const [done, setDone] = useState(false)
 
+  // Is there already an entry for the selected date?
+  const existingEntry = useMemo(
+    () => data.wearLog.find((e) => e.date === date),
+    [data.wearLog, date],
+  )
+  const existingWatch = existingEntry
+    ? data.watches.find((w) => w.id === existingEntry.watchId)
+    : null
+
+  async function handleDelete() {
+    if (!existingEntry) return
+    setBusy(true)
+    try {
+      await mutate(
+        (d) => ({
+          ...d,
+          wearLog: d.wearLog.filter((e) => e.id !== existingEntry.id),
+        }),
+        {
+          message: `Delete wear entry on ${date}`,
+        },
+      )
+    } finally {
+      setBusy(false)
+    }
+  }
+
   // Build the autocomplete suggestion list: historic wear-log locations + known cities
   const suggestions = useMemo(() => {
     const set = new Set<string>()
@@ -141,9 +168,9 @@ function LogWearInner() {
       const w = data.watches.find((x) => x.id === watchId)
       await mutate(
         (d) => {
-          const existing = d.wearLog.findIndex(
-            (e) => e.watchId === entry.watchId && e.date === entry.date,
-          )
+          // Replace ANY entry for this date (one wear per day) — preserves the
+          // existing id so the URL stays stable.
+          const existing = d.wearLog.findIndex((e) => e.date === entry.date)
           const wearLog = [...d.wearLog]
           if (existing >= 0) wearLog[existing] = { ...entry, id: wearLog[existing].id }
           else wearLog.push(entry)
@@ -169,6 +196,39 @@ function LogWearInner() {
   return (
     <div className="space-y-4 max-w-md">
       <h1 className="text-xl font-semibold">Log wear</h1>
+
+      {existingEntry && existingWatch && (
+        <div className="rounded-lg border border-border bg-surface px-3 py-2.5 flex items-center gap-3 text-xs">
+          <div className="w-2 h-2 rounded-full bg-accent shrink-0" />
+          <div className="min-w-0 flex-1">
+            <div className="text-text-muted text-[10px] uppercase tracking-wide">
+              Already logged for {date === todayIso() ? 'today' : date}
+            </div>
+            <div className="text-sm text-text truncate">
+              {existingWatch.brand}{' '}
+              <span className="text-text-muted">{existingWatch.model}</span>
+              {existingEntry.location?.city && (
+                <span className="text-text-subtle">
+                  {' · '}
+                  {existingEntry.location.city}
+                </span>
+              )}
+            </div>
+            <div className="text-[11px] text-text-muted mt-0.5">
+              Picking a watch below will replace this entry — no duplicate.
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={handleDelete}
+            disabled={busy}
+            className="px-2 py-1 text-[11px] rounded-md border border-border text-danger hover:bg-surface-2 shrink-0"
+          >
+            Delete
+          </button>
+        </div>
+      )}
+
       <Card>
         <div className="space-y-3">
           <label className="block text-xs text-text-muted">
@@ -283,7 +343,13 @@ function LogWearInner() {
             disabled={busy || !watchId || done}
             className="w-full px-3 py-2 text-sm rounded-md bg-accent text-white disabled:opacity-50"
           >
-            {done ? 'Logged ✓' : busy ? 'Saving…' : 'Log wear'}
+            {done
+              ? 'Logged ✓'
+              : busy
+                ? 'Saving…'
+                : existingEntry
+                  ? 'Replace wear'
+                  : 'Log wear'}
           </button>
         </div>
       </Card>
