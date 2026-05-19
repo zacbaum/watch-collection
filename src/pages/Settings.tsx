@@ -5,6 +5,17 @@ import { importFromCsv, mergeImport } from '../lib/importer'
 import type { AuthConfig } from '../types'
 import { Card } from '../components/Card'
 import { CheckCircle2, AlertCircle, Upload, Trash2, LogOut } from 'lucide-react'
+import {
+  THEMES,
+  MODES,
+  getTheme,
+  getMode,
+  setTheme,
+  setMode,
+  type ThemeName,
+  type ModeName,
+} from '../lib/theme'
+import { classNames } from '../lib/utils'
 
 export function Settings() {
   const { auth, setAuth, state, mutate } = useDataContext()
@@ -18,6 +29,17 @@ export function Settings() {
   const [testResult, setTestResult] = useState<
     { ok: boolean; message: string } | null
   >(null)
+  const [theme, setThemeState] = useState<ThemeName>(getTheme())
+  const [mode, setModeState] = useState<ModeName>(getMode())
+
+  function pickTheme(t: ThemeName) {
+    setThemeState(t)
+    setTheme(t)
+  }
+  function pickMode(m: ModeName) {
+    setModeState(m)
+    setMode(m)
+  }
 
   async function handleSave(e: FormEvent) {
     e.preventDefault()
@@ -51,6 +73,63 @@ export function Settings() {
   return (
     <div className="space-y-6">
       <h1 className="text-xl font-semibold">Settings</h1>
+
+      <Card title="Appearance">
+        <div className="space-y-4">
+          <div>
+            <div className="text-xs text-text-muted mb-2">Theme</div>
+            <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
+              {THEMES.map((t) => (
+                <button
+                  key={t.key}
+                  type="button"
+                  onClick={() => pickTheme(t.key)}
+                  className={classNames(
+                    'rounded-md border px-3 py-2 text-left transition',
+                    theme === t.key
+                      ? 'border-accent ring-1 ring-accent'
+                      : 'border-border hover:border-border-strong',
+                  )}
+                >
+                  <div className="text-xs font-medium mb-1.5">{t.label}</div>
+                  <div className="flex gap-1">
+                    {t.swatch.map((c, i) => (
+                      <span
+                        key={i}
+                        className="block w-4 h-4 rounded-sm border border-black/10"
+                        style={{ backgroundColor: c }}
+                      />
+                    ))}
+                  </div>
+                </button>
+              ))}
+            </div>
+          </div>
+          <div>
+            <div className="text-xs text-text-muted mb-2">Mode</div>
+            <div className="inline-flex border border-border rounded-md overflow-hidden text-xs">
+              {MODES.map((m) => (
+                <button
+                  key={m.key}
+                  type="button"
+                  onClick={() => pickMode(m.key)}
+                  className={classNames(
+                    'px-3 py-1.5',
+                    mode === m.key
+                      ? 'bg-surface-2 text-text font-medium'
+                      : 'text-text-muted hover:bg-surface',
+                  )}
+                >
+                  {m.label}
+                </button>
+              ))}
+            </div>
+            <div className="text-[11px] text-text-subtle mt-1">
+              "Auto" follows your OS preference and updates if you toggle it system-wide.
+            </div>
+          </div>
+        </div>
+      </Card>
 
       <Card title="GitHub data repo connection">
         <form onSubmit={handleSave} className="space-y-3">

@@ -55,3 +55,178 @@ input, select, textarea {
   width: 100%;
   height: 100%;
 }
+
+/* ─── Themes ──────────────────────────────────────────────────────────────
+ * The @theme block above defines the DEFAULT LIGHT palette. Each theme +
+ * mode combination below overrides the same CSS vars. Tailwind utility
+ * classes (bg-bg, text-text, etc.) resolve to var(--color-...) so they
+ * pick up the live override automatically.
+ *
+ * Selectors target [data-theme="X"] on <html> (set by lib/theme.ts).
+ * Dark mode is indicated by [data-dark="1"] in addition.
+ */
+
+/* ── Default DARK ── */
+html[data-dark="1"]:not([data-theme="slate"]):not([data-theme="warm"]):not([data-theme="mono"]):not([data-theme="forest"]),
+html[data-theme="default"][data-dark="1"] {
+  --color-bg: #0c0a09;
+  --color-surface: #1c1917;
+  --color-surface-2: #292524;
+  --color-border: #44403c;
+  --color-border-strong: #57534e;
+  --color-text: #fafaf9;
+  --color-text-muted: #a8a29e;
+  --color-text-subtle: #78716c;
+  --color-accent: #60a5fa;
+  --color-accent-soft: rgba(37, 99, 235, 0.18);
+  --color-success: #22c55e;
+  --color-warning: #f59e0b;
+  --color-danger: #ef4444;
+  --color-sold: #9ca3af;
+  --color-gifted: #a78bfa;
+}
+
+/* ── Slate (light) ── */
+html[data-theme="slate"] {
+  --color-bg: #ffffff;
+  --color-surface: #f8fafc;
+  --color-surface-2: #f1f5f9;
+  --color-border: #e2e8f0;
+  --color-border-strong: #cbd5e1;
+  --color-text: #0f172a;
+  --color-text-muted: #475569;
+  --color-text-subtle: #94a3b8;
+  --color-accent: #4f46e5;
+  --color-accent-soft: #eef2ff;
+  --color-success: #15803d;
+  --color-warning: #b45309;
+  --color-danger: #b91c1c;
+  --color-sold: #64748b;
+  --color-gifted: #9333ea;
+}
+html[data-theme="slate"][data-dark="1"] {
+  --color-bg: #020617;
+  --color-surface: #0f172a;
+  --color-surface-2: #1e293b;
+  --color-border: #334155;
+  --color-border-strong: #475569;
+  --color-text: #f8fafc;
+  --color-text-muted: #94a3b8;
+  --color-text-subtle: #64748b;
+  --color-accent: #818cf8;
+  --color-accent-soft: rgba(79, 70, 229, 0.18);
+  --color-success: #22c55e;
+  --color-warning: #f59e0b;
+  --color-danger: #f87171;
+  --color-sold: #94a3b8;
+  --color-gifted: #c084fc;
+}
+
+/* ── Warm (light) ── cream paper + terracotta accent */
+html[data-theme="warm"] {
+  --color-bg: #fdfbf6;
+  --color-surface: #faf6ee;
+  --color-surface-2: #f3ebdc;
+  --color-border: #e7d9b9;
+  --color-border-strong: #d6c5a0;
+  --color-text: #292017;
+  --color-text-muted: #6b5d4a;
+  --color-text-subtle: #a89977;
+  --color-accent: #b45309;
+  --color-accent-soft: #fef3c7;
+  --color-success: #65a30d;
+  --color-warning: #d97706;
+  --color-danger: #b91c1c;
+  --color-sold: #78716c;
+  --color-gifted: #a16207;
+}
+html[data-theme="warm"][data-dark="1"] {
+  --color-bg: #1c1611;
+  --color-surface: #2a221a;
+  --color-surface-2: #3a2f22;
+  --color-border: #5a4a36;
+  --color-border-strong: #7a6749;
+  --color-text: #faf6ee;
+  --color-text-muted: #c9b691;
+  --color-text-subtle: #8c7a5e;
+  --color-accent: #f59e0b;
+  --color-accent-soft: rgba(180, 83, 9, 0.2);
+  --color-success: #a3e635;
+  --color-warning: #fbbf24;
+  --color-danger: #f87171;
+  --color-sold: #a8a29e;
+  --color-gifted: #d97706;
+}
+
+/* ── Mono (light) ── pure greys + black accent (status colors retained
+ * since charts encode meaning by red/green/purple) */
+html[data-theme="mono"] {
+  --color-bg: #ffffff;
+  --color-surface: #f9fafb;
+  --color-surface-2: #f3f4f6;
+  --color-border: #e5e7eb;
+  --color-border-strong: #d1d5db;
+  --color-text: #111827;
+  --color-text-muted: #4b5563;
+  --color-text-subtle: #9ca3af;
+  --color-accent: #111827;
+  --color-accent-soft: #f3f4f6;
+  --color-success: #15803d;
+  --color-warning: #b45309;
+  --color-danger: #b91c1c;
+  --color-sold: #9ca3af;
+  --color-gifted: #7c3aed;
+}
+html[data-theme="mono"][data-dark="1"] {
+  --color-bg: #0a0a0a;
+  --color-surface: #171717;
+  --color-surface-2: #262626;
+  --color-border: #404040;
+  --color-border-strong: #525252;
+  --color-text: #fafafa;
+  --color-text-muted: #a3a3a3;
+  --color-text-subtle: #737373;
+  --color-accent: #fafafa;
+  --color-accent-soft: rgba(255, 255, 255, 0.08);
+  --color-success: #22c55e;
+  --color-warning: #f59e0b;
+  --color-danger: #ef4444;
+  --color-sold: #a3a3a3;
+  --color-gifted: #a78bfa;
+}
+
+/* ── Forest (light) ── soft green-tinted neutrals + forest green accent */
+html[data-theme="forest"] {
+  --color-bg: #f8faf7;
+  --color-surface: #f1f6ed;
+  --color-surface-2: #e6efe0;
+  --color-border: #cad9be;
+  --color-border-strong: #aac49c;
+  --color-text: #1f2937;
+  --color-text-muted: #4b5563;
+  --color-text-subtle: #9ca3af;
+  --color-accent: #15803d;
+  --color-accent-soft: #dcfce7;
+  --color-success: #15803d;
+  --color-warning: #b45309;
+  --color-danger: #b91c1c;
+  --color-sold: #6b7280;
+  --color-gifted: #7c3aed;
+}
+html[data-theme="forest"][data-dark="1"] {
+  --color-bg: #0a1410;
+  --color-surface: #122016;
+  --color-surface-2: #1a2e20;
+  --color-border: #2a4a36;
+  --color-border-strong: #3a6748;
+  --color-text: #f0fdf4;
+  --color-text-muted: #a3c8b0;
+  --color-text-subtle: #6b8a7a;
+  --color-accent: #4ade80;
+  --color-accent-soft: rgba(21, 128, 61, 0.2);
+  --color-success: #4ade80;
+  --color-warning: #fbbf24;
+  --color-danger: #f87171;
+  --color-sold: #94a3b8;
+  --color-gifted: #c084fc;
+}
