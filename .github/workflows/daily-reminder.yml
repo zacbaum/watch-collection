@@ -1,0 +1,46 @@
+name: Daily log reminder
+
+# Runs once a day. Posts a notification to ntfy.sh which delivers a push to
+# any device subscribed to the topic.
+#
+# Setup:
+#   1. Install ntfy on your phone (iOS App Store / Google Play / F-Droid)
+#   2. Subscribe to a unique topic — anything hard to guess works as a
+#      shared secret, e.g. "zac-watches-7H2pK9". The URL pattern is
+#      https://ntfy.sh/<topic>
+#   3. In this repo: Settings → Secrets and variables → Actions → New
+#      repository secret
+#        Name:  NTFY_TOPIC
+#        Value: zac-watches-7H2pK9   (just the topic, not the full URL)
+#   4. Optional: NTFY_SERVER secret if you self-host (defaults to
+#      https://ntfy.sh)
+#
+# Schedule: 09:00 UTC = 10:00 BST (UK summer) / 09:00 GMT (UK winter).
+# Adjust the cron if you want exact local time year-round.
+
+on:
+  schedule:
+    - cron: '0 9 * * *'
+  workflow_dispatch:
+
+jobs:
+  notify:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Post to ntfy
+        env:
+          TOPIC: ${{ secrets.NTFY_TOPIC }}
+          SERVER: ${{ secrets.NTFY_SERVER }}
+        run: |
+          if [ -z "$TOPIC" ]; then
+            echo "NTFY_TOPIC secret not set — skipping. Add it in repo Settings to enable reminders."
+            exit 0
+          fi
+          SERVER="${SERVER:-https://ntfy.sh}"
+          curl -fsS \
+            -H "Title: Watch collection" \
+            -H "Tags: watch,bell" \
+            -H "Click: https://zacbaum.github.io/watch-collection/" \
+            -H "Priority: default" \
+            -d "Log today's wear" \
+            "$SERVER/$TOPIC"

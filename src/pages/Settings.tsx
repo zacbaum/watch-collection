@@ -1,0 +1,315 @@
+import { useState, type FormEvent } from 'react'
+import { useDataContext } from '../hooks/useData'
+import { clearAuth, saveAuth, verifyAuth } from '../lib/auth'
+import { importFromCsv, mergeImport } from '../lib/importer'
+import type { AuthConfig } from '../types'
+import { Card } from '../components/Card'
+import { CheckCircle2, AlertCircle, Upload, Trash2, LogOut } from 'lucide-react'
+
+export function Settings() {
+  const { auth, setAuth, state, mutate } = useDataContext()
+  const [form, setForm] = useState<AuthConfig>({
+    username: auth?.username ?? 'zacbaum',
+    dataRepo: auth?.dataRepo ?? 'watch-collection-data',
+    branch: auth?.branch ?? 'main',
+    token: auth?.token ?? '',
+  })
+  const [testing, setTesting] = useState(false)
+  const [testResult, setTestResult] = useState<
+    { ok: boolean; message: string } | null
+  >(null)
+
+  async function handleSave(e: FormEvent) {
+    e.preventDefault()
+    setTesting(true)
+    setTestResult(null)
+    try {
+      const r = await verifyAuth(form)
+      if (!r.private) {
+        setTestResult({
+          ok: false,
+          message: 'Warning: this repo is public. Switch to a private repo or stop here.',
+        })
+      } else {
+        setTestResult({ ok: true, message: 'Connected. Data repo is private.' })
+      }
+      saveAuth(form)
+      setAuth(form)
+    } catch (err) {
+      setTestResult({ ok: false, message: (err as Error).message })
+    } finally {
+      setTesting(false)
+    }
+  }
+
+  function handleDisconnect() {
+    clearAuth()
+    setAuth(null)
+    setTestResult(null)
+  }
+
+  return (
+    <div className="space-y-6">
+      <h1 className="text-xl font-semibold">Settings</h1>
+
+      <Card title="GitHub data repo connection">
+        <form onSubmit={handleSave} className="space-y-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <Field
+              label="GitHub username"
+              value={form.username}
+              onChange={(v) => setForm((f) => ({ ...f, username: v }))}
+              placeholder="zacbaum"
+            />
+            <Field
+              label="Data repo name"
+              value={form.dataRepo}
+              onChange={(v) => setForm((f) => ({ ...f, dataRepo: v }))}
+              placeholder="watch-collection-data"
+            />
+            <Field
+              label="Branch"
+              value={form.branch}
+              onChange={(v) => setForm((f) => ({ ...f, branch: v }))}
+              placeholder="main"
+            />
+            <Field
+              label="Personal access token"
+              value={form.token}
+              onChange={(v) => setForm((f) => ({ ...f, token: v }))}
+              type="password"
+              placeholder="github_pat_…"
+            />
+          </div>
+          <div className="text-xs text-text-muted">
+            Create a fine-grained token at{' '}
+            <a
+              href="https://github.com/settings/personal-access-tokens"
+              target="_blank"
+              rel="noreferrer"
+              className="text-accent underline"
+            >
+              github.com/settings/personal-access-tokens
+            </a>{' '}
+            scoped to <code className="px-1 bg-surface-2 rounded">{form.dataRepo || 'watch-collection-data'}</code> with{' '}
+            <strong>Contents: Read &amp; write</strong>. Stored only in your browser.
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              type="submit"
+              disabled={testing || !form.token || !form.username || !form.dataRepo}
+              className="px-3 py-1.5 text-xs rounded-md bg-accent text-white disabled:opacity-50"
+            >
+              {testing ? 'Testing…' : auth ? 'Save & reconnect' : 'Connect'}
+            </button>
+            {auth && (
+              <button
+                type="button"
+                onClick={handleDisconnect}
+                className="px-3 py-1.5 text-xs rounded-md border border-border flex items-center gap-1"
+              >
+                <LogOut size={12} /> Disconnect
+              </button>
+            )}
+            {testResult && (
+              <span
+                className={`text-xs flex items-center gap-1 ${
+                  testResult.ok ? 'text-success' : 'text-danger'
+                }`}
+              >
+                {testResult.ok ? <CheckCircle2 size={14} /> : <AlertCircle size={14} />}
+                {testResult.message}
+              </span>
+            )}
+          </div>
+        </form>
+      </Card>
+
+      {state.kind === 'ready' && (
+        <ImportSection
+          onImport={async (text) => {
+            const result = importFromCsv(text)
+            await mutate((d) => mergeImport(d, result), {
+              message: `Import ${result.summary.distinctWatches} watches, ${result.wearLog.length} wear entries`,
+            })
+            return result.summary
+          }}
+        />
+      )}
+
+      {state.kind === 'ready' && (
+        <Card title="Data">
+          <div className="text-xs text-text-muted mb-2">
+            {state.data.watches.length} watches · {state.data.wearLog.length} wear log entries ·{' '}
+            {state.data.wishlist.length} wishlist items
+          </div>
+          <div className="flex gap-2">
+            <button
+              onClick={() => {
+                const blob = new Blob([JSON.stringify(state.data, null, 2)], {
+                  type: 'application/json',
+                })
+                const url = URL.createObjectURL(blob)
+                const a = document.createElement('a')
+                a.href = url
+                a.download = `watch-collection-${new Date().toISOString().slice(0, 10)}.json`
+                a.click()
+                URL.revokeObjectURL(url)
+              }}
+              className="px-3 py-1.5 text-xs rounded-md border border-border"
+            >
+              Export JSON
+            </button>
+            <button
+              onClick={() => {
+                if (
+                  !confirm(
+                    'Replace ALL data with an empty dataset and commit? This cannot be undone (except via git history).',
+                  )
+                )
+                  return
+                void mutate(
+                  () => ({
+                    watches: [],
+                    wearLog: [],
+                    wishlist: [],
+                    serviceLog: [],
+                    valuations: [],
+                    schemaVersion: 1,
+                    updatedAt: new Date().toISOString(),
+                  }),
+                  { message: 'Reset data' },
+                )
+              }}
+              className="px-3 py-1.5 text-xs rounded-md border border-border text-danger flex items-center gap-1"
+            >
+              <Trash2 size={12} /> Reset
+            </button>
+          </div>
+        </Card>
+      )}
+    </div>
+  )
+}
+
+function Field({
+  label,
+  value,
+  onChange,
+  type = 'text',
+  placeholder,
+}: {
+  label: string
+  value: string
+  onChange: (v: string) => void
+  type?: 'text' | 'password'
+  placeholder?: string
+}) {
+  return (
+    <label className="text-xs text-text-muted block">
+      {label}
+      <input
+        type={type}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        placeholder={placeholder}
+        className="mt-1 block w-full text-sm px-2.5 py-1.5 border border-border rounded-md bg-bg text-text focus:outline-none focus:border-accent"
+      />
+    </label>
+  )
+}
+
+function ImportSection({
+  onImport,
+}: {
+  onImport: (
+    text: string,
+  ) => Promise<{
+    rowsParsed: number
+    rowsSkipped: number
+    distinctWatches: number
+    dateRange: { from: string; to: string } | null
+  }>
+}) {
+  const [text, setText] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [result, setResult] = useState<{
+    rowsParsed: number
+    rowsSkipped: number
+    distinctWatches: number
+    dateRange: { from: string; to: string } | null
+  } | null>(null)
+  const [err, setErr] = useState<string | null>(null)
+
+  async function handleFile(f: File) {
+    const t = await f.text()
+    setText(t)
+  }
+
+  async function handleImport() {
+    setBusy(true)
+    setErr(null)
+    setResult(null)
+    try {
+      const r = await onImport(text)
+      setResult(r)
+      setText('')
+    } catch (e) {
+      setErr((e as Error).message)
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <Card title="Import wear log CSV">
+      <div className="text-xs text-text-muted mb-3">
+        Paste tab- or comma-separated rows with columns:{' '}
+        <code className="px-1 bg-surface-2 rounded">Date, Weekday, Month, Brand, Model, City, Region, Country</code>.
+        Dates in DD/MM/YYYY. The importer infers your collection from distinct Brand+Model pairs and de-duplicates against existing entries.
+      </div>
+      <div className="flex items-center gap-2 mb-2">
+        <label className="px-3 py-1.5 text-xs rounded-md border border-border cursor-pointer inline-flex items-center gap-1">
+          <Upload size={12} /> Choose file
+          <input
+            type="file"
+            accept=".csv,.tsv,.txt"
+            className="hidden"
+            onChange={(e) => {
+              const f = e.target.files?.[0]
+              if (f) void handleFile(f)
+            }}
+          />
+        </label>
+        <button
+          onClick={handleImport}
+          disabled={busy || !text.trim()}
+          className="px-3 py-1.5 text-xs rounded-md bg-accent text-white disabled:opacity-50"
+        >
+          {busy ? 'Importing…' : 'Import'}
+        </button>
+      </div>
+      <textarea
+        value={text}
+        onChange={(e) => setText(e.target.value)}
+        rows={6}
+        placeholder="Paste sheet rows here…"
+        className="w-full font-mono text-xs px-2 py-1.5 border border-border rounded-md bg-bg"
+      />
+      {err && (
+        <div className="text-xs text-danger mt-2 flex items-center gap-1">
+          <AlertCircle size={14} /> {err}
+        </div>
+      )}
+      {result && (
+        <div className="text-xs text-success mt-2 flex items-center gap-1">
+          <CheckCircle2 size={14} />
+          Imported {result.rowsParsed} rows · {result.distinctWatches} watches
+          {result.dateRange &&
+            ` · ${result.dateRange.from} → ${result.dateRange.to}`}
+          {result.rowsSkipped > 0 && ` · ${result.rowsSkipped} skipped`}
+        </div>
+      )}
+    </Card>
+  )
+}
