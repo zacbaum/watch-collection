@@ -24,7 +24,7 @@ import { useData, useDataContext } from '../hooks/useData'
 import type { Watch, WatchStatus } from '../types'
 import { daysSince, formatGbp, classNames, titleCase } from '../lib/utils'
 import { differenceInDays, parseISO } from 'date-fns'
-import { colorFor, PALETTE } from '../lib/palette'
+import { colorFor } from '../lib/palette'
 import { nanoid } from 'nanoid'
 import { Plus } from 'lucide-react'
 
@@ -164,11 +164,8 @@ function CompositionSection({ watches }: { watches: Watch[] }) {
       </h2>
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
         <BrandMixCard watches={watches} />
-        <MovementMixCard watches={watches} />
-        <CategoryMixCard watches={watches} />
         <CaseGeometryCard watches={watches} />
         <LugWidthHistogramCard watches={watches} />
-        <CaseMaterialMixCard watches={watches} />
         <DecadeHistogramCard watches={watches} />
       </div>
     </div>
@@ -232,7 +229,14 @@ function WatchTile({
                   )}
                 </div>
               </div>
-              <StatusBadge status={watch.status} size="xs" />
+              <div className="flex items-center gap-1 shrink-0">
+                {watch.category && (
+                  <span className="inline-flex items-center text-[10px] px-1.5 py-px border border-border rounded-full text-text-muted bg-surface-2 font-medium">
+                    {titleCase(watch.category)}
+                  </span>
+                )}
+                <StatusBadge status={watch.status} size="xs" />
+              </div>
             </div>
             {watch.nickname && (
               <div className="text-[11px] text-text-subtle italic mt-0.5 truncate">
@@ -376,83 +380,6 @@ function BrandMixCard({ watches }: { watches: Watch[] }) {
   )
 }
 
-function MovementMixCard({ watches }: { watches: Watch[] }) {
-  const counts = useMemo(() => {
-    const m = new Map<string, number>()
-    for (const w of watches) {
-      const k = w.movement ?? 'unknown'
-      m.set(k, (m.get(k) ?? 0) + 1)
-    }
-    return Array.from(m.entries()).map(([name, value]) => ({ name: titleCase(name), value }))
-  }, [watches])
-
-  return (
-    <Card title="Movement mix">
-      {counts.length === 0 ? (
-        <div className="text-xs text-text-muted">No watches.</div>
-      ) : (
-        <div className="h-48">
-          <ResponsiveContainer width="100%" height="100%">
-            <PieChart>
-              <Pie data={counts} dataKey="value" nameKey="name" outerRadius={62}>
-                {counts.map((_, i) => (
-                  <Cell key={i} fill={PALETTE[i % PALETTE.length]} />
-                ))}
-              </Pie>
-              <Tooltip />
-              <Legend wrapperStyle={{ fontSize: 11 }} />
-            </PieChart>
-          </ResponsiveContainer>
-        </div>
-      )}
-    </Card>
-  )
-}
-
-function CategoryMixCard({ watches }: { watches: Watch[] }) {
-  const counts = useMemo(() => {
-    const m = new Map<string, number>()
-    for (const w of watches) {
-      if (!w.category) continue
-      m.set(w.category, (m.get(w.category) ?? 0) + 1)
-    }
-    return Array.from(m.entries()).map(([name, value]) => ({ name: titleCase(name), value }))
-  }, [watches])
-
-  const filledRatio = counts.reduce((s, c) => s + c.value, 0) / Math.max(watches.length, 1)
-
-  return (
-    <Card title="Category mix">
-      {counts.length === 0 ? (
-        <div className="text-xs text-text-muted">
-          Set category on watches in the detail view to see this.
-        </div>
-      ) : (
-        <>
-          <div className="h-48">
-            <ResponsiveContainer width="100%" height="100%">
-              <PieChart>
-                <Pie data={counts} dataKey="value" nameKey="name" outerRadius={62}>
-                  {counts.map((_, i) => (
-                    <Cell key={i} fill={PALETTE[i % PALETTE.length]} />
-                  ))}
-                </Pie>
-                <Tooltip />
-                <Legend wrapperStyle={{ fontSize: 11 }} />
-              </PieChart>
-            </ResponsiveContainer>
-          </div>
-          {filledRatio < 1 && (
-            <div className="text-[11px] text-text-subtle mt-1">
-              {Math.round(filledRatio * 100)}% of watches have a category set
-            </div>
-          )}
-        </>
-      )}
-    </Card>
-  )
-}
-
 function CaseGeometryCard({ watches }: { watches: Watch[] }) {
   const points = useMemo(
     () =>
@@ -568,43 +495,6 @@ function LugWidthHistogramCard({ watches }: { watches: Watch[] }) {
               <Tooltip contentStyle={{ fontSize: 11 }} />
               <Bar dataKey="count" fill="#0d9488" radius={[3, 3, 0, 0]} />
             </BarChart>
-          </ResponsiveContainer>
-        </div>
-      )}
-    </Card>
-  )
-}
-
-function CaseMaterialMixCard({ watches }: { watches: Watch[] }) {
-  const counts = useMemo(() => {
-    const m = new Map<string, number>()
-    for (const w of watches) {
-      if (!w.caseMaterial) continue
-      m.set(w.caseMaterial, (m.get(w.caseMaterial) ?? 0) + 1)
-    }
-    return Array.from(m.entries())
-      .map(([name, value]) => ({ name: titleCase(name), value }))
-      .sort((a, b) => b.value - a.value)
-  }, [watches])
-
-  return (
-    <Card title="Case material">
-      {counts.length === 0 ? (
-        <div className="text-xs text-text-muted">
-          Add case materials in the watch detail view to see this.
-        </div>
-      ) : (
-        <div className="h-48">
-          <ResponsiveContainer width="100%" height="100%">
-            <PieChart>
-              <Pie data={counts} dataKey="value" nameKey="name" outerRadius={62}>
-                {counts.map((c, i) => (
-                  <Cell key={c.name} fill={PALETTE[i % PALETTE.length]} />
-                ))}
-              </Pie>
-              <Tooltip />
-              <Legend wrapperStyle={{ fontSize: 11 }} />
-            </PieChart>
           </ResponsiveContainer>
         </div>
       )}
