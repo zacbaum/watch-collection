@@ -810,6 +810,7 @@ function WearsVsSpendCard({
   wearLog: WearLogEntry[]
   watchColors: Map<string, string>
 }) {
+  const narrow = useIsNarrow()
   const rows = useMemo(() => {
     const wearsByWatch = new Map<string, number>()
     for (const e of wearLog) wearsByWatch.set(e.watchId, (wearsByWatch.get(e.watchId) ?? 0) + 1)
@@ -856,7 +857,11 @@ function WearsVsSpendCard({
                   v >= 1000 ? `£${(v / 1000).toFixed(0)}k` : `£${v.toFixed(0)}`
                 }
                 ticks={[50, 100, 250, 500, 1000, 2500, 5000, 10000]}
-                label={{ value: 'Cost (GBP)', position: 'insideBottom', offset: -8, fontSize: 10 }}
+                label={
+                  narrow
+                    ? undefined
+                    : { value: 'Cost (GBP)', position: 'insideBottom', offset: -8, fontSize: 10 }
+                }
               />
               <YAxis
                 type="number"
@@ -867,7 +872,11 @@ function WearsVsSpendCard({
                 allowDataOverflow
                 fontSize={10}
                 ticks={[1, 3, 10, 30, 100, 300, 1000]}
-                label={{ value: 'Total wears (log)', angle: -90, position: 'insideLeft', fontSize: 10 }}
+                label={
+                  narrow
+                    ? undefined
+                    : { value: 'Total wears (log)', angle: -90, position: 'insideLeft', fontSize: 10 }
+                }
               />
               <Tooltip
                 cursor={{ strokeDasharray: '3 3' }}
@@ -1204,18 +1213,23 @@ function WatchYearHeatmapCard({
   }
 
   const narrow = useIsNarrow()
-  const LABEL_W = narrow ? 110 : 180
-  const TOTAL_W = narrow ? 36 : 50
+  const LABEL_W = narrow ? 84 : 180
+  const TOTAL_W = narrow ? 26 : 50
+  const CELL_MIN = narrow ? 4 : 8
   // CSS grid: label column | N year columns (flex-equal) | total column
-  const gridTemplate = `${LABEL_W}px repeat(${years.length}, minmax(${narrow ? 6 : 8}px, 1fr)) ${TOTAL_W}px`
+  const gridTemplate = `${LABEL_W}px repeat(${years.length}, minmax(${CELL_MIN}px, 1fr)) ${TOTAL_W}px`
+  // Only force a minWidth (and enable horizontal scroll) when the natural
+  // minimum would overflow even a phone-width viewport. For typical year
+  // counts the grid now fluidly fills the card without scrolling.
+  const naturalMin = LABEL_W + years.length * CELL_MIN + TOTAL_W
 
   return (
     <Card title="Wear heatmap · watch × year" padding={false}>
-      <div className="p-3 w-full overflow-x-auto">
+      <div className={`p-3 w-full${naturalMin > 360 ? ' overflow-x-auto' : ''}`}>
         {/* Year header */}
         <div
           className="grid gap-x-1 items-end mb-1"
-          style={{ gridTemplateColumns: gridTemplate, minWidth: LABEL_W + years.length * 14 + TOTAL_W }}
+          style={{ gridTemplateColumns: gridTemplate, minWidth: naturalMin }}
         >
           <div />
           {years.map((y) => (
@@ -1242,7 +1256,7 @@ function WatchYearHeatmapCard({
               className="grid gap-x-1 items-center mb-0.5"
               style={{
                 gridTemplateColumns: gridTemplate,
-                minWidth: LABEL_W + years.length * 14 + TOTAL_W,
+                minWidth: naturalMin,
                 ...(isFirstInactive
                   ? {
                       borderTop: '1px dashed var(--color-border-strong)',
@@ -1302,6 +1316,7 @@ function TravelCompanionCard({
   wearLog: WearLogEntry[]
   watchColors: Map<string, string>
 }) {
+  const narrow = useIsNarrow()
   const rows = useMemo(() => {
     const counts = new Map<string, { home: number; away: number }>()
     for (const e of wearLog) {
@@ -1348,7 +1363,7 @@ function TravelCompanionCard({
               <YAxis
                 dataKey="name"
                 type="category"
-                width={170}
+                width={narrow ? 96 : 170}
                 fontSize={10}
                 interval={0}
               />

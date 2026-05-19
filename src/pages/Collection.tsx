@@ -22,7 +22,6 @@ import { useData, useDataContext } from '../hooks/useData'
 import type { Watch, WatchStatus } from '../types'
 import { daysSince, formatGbp, classNames, titleCase } from '../lib/utils'
 import { differenceInDays, parseISO } from 'date-fns'
-import { detectArchetype } from '../lib/insights'
 import { colorFor, PALETTE } from '../lib/palette'
 import { nanoid } from 'nanoid'
 import { Plus } from 'lucide-react'
@@ -105,8 +104,6 @@ function CollectionInner() {
         </button>
       </div>
 
-      <ArchetypeCard watches={data.watches} />
-
       {adding && <AddWatchForm onCancel={() => setAdding(false)} onSubmit={handleAdd} />}
 
       <div className="flex flex-wrap items-center gap-2">
@@ -154,39 +151,6 @@ function CollectionInner() {
         </>
       )}
     </div>
-  )
-}
-
-function ArchetypeCard({ watches }: { watches: Watch[] }) {
-  const archetype = useMemo(() => detectArchetype(watches), [watches])
-  if (!archetype) return null
-  return (
-    <Card>
-      <div className="flex items-start gap-3">
-        <div className="w-1 self-stretch rounded-full bg-accent shrink-0" />
-        <div className="flex-1 min-w-0">
-          <div className="text-[10px] uppercase tracking-wide text-text-muted">
-            Your collector archetype
-          </div>
-          <div className="mt-0.5 text-base font-semibold text-text">{archetype.name}</div>
-          <div className="text-sm text-text-muted italic mt-0.5">{archetype.tagline}</div>
-          <div className="mt-3 text-xs text-text">{archetype.meaning}</div>
-          <div className="mt-3">
-            <div className="text-[10px] uppercase tracking-wide text-text-muted mb-1">
-              What you value
-            </div>
-            <ul className="text-xs text-text-muted list-disc pl-4 space-y-0.5">
-              {archetype.values.map((v, i) => (
-                <li key={i}>{v}</li>
-              ))}
-            </ul>
-          </div>
-          <div className="text-[10px] text-text-subtle mt-3">
-            Updates automatically as your collection changes.
-          </div>
-        </div>
-      </div>
-    </Card>
   )
 }
 
