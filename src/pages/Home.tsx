@@ -1,9 +1,10 @@
+import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { Gate } from '../components/Gate'
 import { Card, Stat } from '../components/Card'
 import { Empty } from '../components/Empty'
 import { useData } from '../hooks/useData'
-import { daysSince, formatDate, formatGbp, todayIso } from '../lib/utils'
+import { daysSince, formatDate, formatGbp, todayIso, classNames } from '../lib/utils'
 import { StatusBadge } from '../components/StatusBadge'
 import { ArrowRight, Plus, Check } from 'lucide-react'
 
@@ -17,6 +18,7 @@ export function Home() {
 
 function HomeInner() {
   const data = useData()
+  const [dormantDays, setDormantDays] = useState<10 | 30 | 90>(90)
   const owned = data.watches.filter((w) => w.status === 'owned')
   const paid = owned.filter((w) => !w.wasGift)
   const totalValue = owned.reduce((sum, w) => sum + (w.currentValueGbp ?? 0), 0)
@@ -43,15 +45,14 @@ function HomeInner() {
     if (!prev || e.date > prev) lastWornByWatch.set(e.watchId, e.date)
   }
 
-  // Dormant capital: paid-for owned watches unworn 90+ days (or never)
-  const DORMANT_DAYS = 90
+  // Dormant capital: paid-for owned watches unworn {dormantDays}+ days (or never)
   let dormantValue = 0
   let dormantCount = 0
   for (const w of paid) {
     if (!w.currentValueGbp) continue
     const last = lastWornByWatch.get(w.id)
     const days = last ? daysSince(last) : Infinity
-    if (days >= DORMANT_DAYS) {
+    if (days >= dormantDays) {
       dormantValue += w.currentValueGbp
       dormantCount += 1
     }
@@ -186,15 +187,38 @@ function HomeInner() {
           }
           sub={`${sold.length} sold`}
         />
-        <Stat
-          label="Dormant capital"
-          value={dormantValue > 0 ? formatGbp(dormantValue) : '—'}
-          sub={
-            dormantCount > 0
-              ? `${dormantCount} owned watch${dormantCount === 1 ? '' : 'es'} unworn 90+ days`
-              : 'nothing untouched for 90+ days'
-          }
-        />
+        <div className="border border-border rounded-lg p-4 bg-surface">
+          <div className="flex items-center justify-between gap-2">
+            <div className="text-[11px] uppercase tracking-wide text-text-muted">
+              Dormant capital
+            </div>
+            <div className="flex border border-border rounded-md overflow-hidden text-[10px]">
+              {([10, 30, 90] as const).map((d) => (
+                <button
+                  key={d}
+                  type="button"
+                  onClick={() => setDormantDays(d)}
+                  className={classNames(
+                    'px-1.5 py-0.5 transition',
+                    dormantDays === d
+                      ? 'bg-surface-2 text-text font-medium'
+                      : 'text-text-muted hover:bg-surface-2/60',
+                  )}
+                >
+                  {d}d
+                </button>
+              ))}
+            </div>
+          </div>
+          <div className="mt-1 text-2xl font-semibold text-text">
+            {dormantValue > 0 ? formatGbp(dormantValue) : '—'}
+          </div>
+          <div className="text-xs text-text-muted mt-0.5">
+            {dormantCount > 0
+              ? `${dormantCount} owned watch${dormantCount === 1 ? '' : 'es'} unworn ${dormantDays}+ days`
+              : `nothing untouched for ${dormantDays}+ days`}
+          </div>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
