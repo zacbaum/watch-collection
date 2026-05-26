@@ -322,7 +322,7 @@ function WearDistributionCard({
   wearLog: WearLogEntry[]
   watchColors: Map<string, string>
 }) {
-  const [includeInactive, setIncludeInactive] = useState(true)
+  const [includeInactive, setIncludeInactive] = useState(false)
   const counts = useMemo(() => {
     const m = new Map<string, number>()
     for (const e of wearLog) m.set(e.watchId, (m.get(e.watchId) ?? 0) + 1)
@@ -692,7 +692,7 @@ function CostPerWearOverTimeCard({
   since: string | null
   watchColors: Map<string, string>
 }) {
-  const [includeInactive, setIncludeInactive] = useState(true)
+  const [includeInactive, setIncludeInactive] = useState(false)
   const { rows, eligible, yearTicks } = useMemo(() => {
     const eligible = watches.filter(
       (w) =>

@@ -188,27 +188,8 @@ function HomeInner() {
           sub={`${sold.length} sold`}
         />
         <div className="border border-border rounded-lg p-4 bg-surface">
-          <div className="flex items-center justify-between gap-2">
-            <div className="text-[11px] uppercase tracking-wide text-text-muted">
-              Dormant capital
-            </div>
-            <div className="flex border border-border rounded-md overflow-hidden text-[10px]">
-              {([10, 30, 90] as const).map((d) => (
-                <button
-                  key={d}
-                  type="button"
-                  onClick={() => setDormantDays(d)}
-                  className={classNames(
-                    'px-1.5 py-0.5 transition',
-                    dormantDays === d
-                      ? 'bg-surface-2 text-text font-medium'
-                      : 'text-text-muted hover:bg-surface-2/60',
-                  )}
-                >
-                  {d}d
-                </button>
-              ))}
-            </div>
+          <div className="text-[11px] uppercase tracking-wide text-text-muted">
+            Dormant capital
           </div>
           <div className="mt-1 text-2xl font-semibold text-text">
             {dormantValue > 0 ? formatGbp(dormantValue) : '—'}
@@ -217,6 +198,23 @@ function HomeInner() {
             {dormantCount > 0
               ? `${dormantCount} owned watch${dormantCount === 1 ? '' : 'es'} unworn ${dormantDays}+ days`
               : `nothing untouched for ${dormantDays}+ days`}
+          </div>
+          <div className="mt-2 inline-flex border border-border rounded-md overflow-hidden text-[10px] w-fit">
+            {([10, 30, 90] as const).map((d) => (
+              <button
+                key={d}
+                type="button"
+                onClick={() => setDormantDays(d)}
+                className={classNames(
+                  'px-1.5 py-0.5 transition',
+                  dormantDays === d
+                    ? 'bg-surface-2 text-text font-medium'
+                    : 'text-text-muted hover:bg-surface-2/60',
+                )}
+              >
+                {d}d
+              </button>
+            ))}
           </div>
         </div>
       </div>
