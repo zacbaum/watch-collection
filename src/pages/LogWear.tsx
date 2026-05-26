@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { nanoid } from 'nanoid'
 import { Gate } from '../components/Gate'
@@ -76,15 +76,6 @@ function LogWearInner() {
     for (const k of knownPlaces()) set.add(`${k.city}, ${k.country}`)
     return Array.from(set).sort()
   }, [data.wearLog])
-
-  // Pre-select most-worn watch
-  useEffect(() => {
-    if (watchId || owned.length === 0) return
-    const counts = new Map<string, number>()
-    for (const e of data.wearLog) counts.set(e.watchId, (counts.get(e.watchId) ?? 0) + 1)
-    const sorted = [...owned].sort((a, b) => (counts.get(b.id) ?? 0) - (counts.get(a.id) ?? 0))
-    setWatchId(sorted[0]?.id ?? '')
-  }, [owned, data.wearLog, watchId])
 
   async function captureLocation() {
     setLocStatus('pending')
@@ -247,6 +238,7 @@ function LogWearInner() {
               onChange={(e) => setWatchId(e.target.value)}
               className="mt-1 block w-full text-sm px-2 py-1.5 border border-border rounded-md bg-bg"
             >
+              <option value="">— Pick a watch —</option>
               {owned.map((w) => (
                 <option key={w.id} value={w.id}>
                   {w.brand} {w.model}

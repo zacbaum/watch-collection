@@ -1,4 +1,12 @@
-import { addDays, differenceInDays, format, parseISO, subMonths } from 'date-fns'
+import {
+  addDays,
+  addWeeks,
+  differenceInDays,
+  format,
+  parseISO,
+  startOfISOWeek,
+  subMonths,
+} from 'date-fns'
 import type { Watch, WearLogEntry } from '../types'
 
 export type TimeRange = 'all' | '5y' | '3y' | '1y' | '6m' | '1m'
@@ -87,6 +95,27 @@ export function monthKeysInRange(fromIso: string, toIso: string): string[] {
     }
   }
   return out
+}
+
+/**
+ * Generate every yyyy-MM-dd key for the Monday of each ISO week in
+ * [from, to] (inclusive of the weeks containing each bound).
+ */
+export function weekKeysInRange(fromIso: string, toIso: string): string[] {
+  const start = startOfISOWeek(parseISO(fromIso))
+  const end = startOfISOWeek(parseISO(toIso))
+  const out: string[] = []
+  let d = start
+  while (d.getTime() <= end.getTime()) {
+    out.push(format(d, 'yyyy-MM-dd'))
+    d = addWeeks(d, 1)
+  }
+  return out
+}
+
+/** Monday-of-ISO-week key for a yyyy-MM-dd date, returned as yyyy-MM-dd. */
+export function weekKeyOf(dateIso: string): string {
+  return format(startOfISOWeek(parseISO(dateIso)), 'yyyy-MM-dd')
 }
 
 /**

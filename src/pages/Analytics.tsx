@@ -51,9 +51,12 @@ import {
   rotationDiversityByMonth,
   rotationScore,
   watchShareByMonth,
+  weekKeyOf,
+  weekKeysInRange,
   yearKeysInRange,
   type TimeRange,
 } from '../lib/wearStats'
+import { format, parseISO } from 'date-fns'
 
 export function Analytics() {
   return (
@@ -690,13 +693,14 @@ function CostPerWearOverTimeCard({
   watchColors: Map<string, string>
 }) {
   const [includeInactive, setIncludeInactive] = useState(true)
-  const { rows, eligible } = useMemo(() => {
+  const { rows, eligible, yearTicks } = useMemo(() => {
     const eligible = watches.filter(
       (w) =>
         (w.acquisitionPriceGbp ?? 0) > 0 &&
         (includeInactive || (w.status !== 'sold' && w.status !== 'gifted')),
     )
-    if (eligible.length === 0 || wearLog.length === 0) return { rows: [], eligible: [] }
+    if (eligible.length === 0 || wearLog.length === 0)
+      return { rows: [], eligible: [], yearTicks: [] as string[] }
 
     const sortedLog = [...wearLog].sort((a, b) => a.date.localeCompare(b.date))
     const minDate = sortedLog[0].date
@@ -704,29 +708,29 @@ function CostPerWearOverTimeCard({
     const maxDate = sortedLog[sortedLog.length - 1].date > todayIso
       ? sortedLog[sortedLog.length - 1].date
       : todayIso
-    // Compute over the full month range so the cumulative count is honest
-    const allMonths = monthKeysInRange(minDate, maxDate)
+    // Compute over the full week range so the cumulative count is honest
+    const allWeeks = weekKeysInRange(minDate, maxDate)
 
-    // Per-watch monthly wear count (in-month)
-    const perWatchMonth = new Map<string, Map<string, number>>()
-    for (const w of eligible) perWatchMonth.set(w.id, new Map())
+    // Per-watch weekly wear count (in-week)
+    const perWatchWeek = new Map<string, Map<string, number>>()
+    for (const w of eligible) perWatchWeek.set(w.id, new Map())
     for (const e of sortedLog) {
-      const m = perWatchMonth.get(e.watchId)
+      const m = perWatchWeek.get(e.watchId)
       if (!m) continue
-      const month = e.date.slice(0, 7)
-      m.set(month, (m.get(month) ?? 0) + 1)
+      const wk = weekKeyOf(e.date)
+      m.set(wk, (m.get(wk) ?? 0) + 1)
     }
 
-    // Build rows with cumulative CPW per watch per month
+    // Build rows with cumulative CPW per watch per week
     const cumByWatch = new Map<string, number>()
     for (const w of eligible) cumByWatch.set(w.id, 0)
 
-    const fullRows = allMonths.map((month) => {
-      const row: Record<string, string | number | null> = { month }
+    const fullRows = allWeeks.map((week) => {
+      const row: Record<string, string | number | null> = { week }
       for (const w of eligible) {
-        const m = perWatchMonth.get(w.id)!
-        const inMonth = m.get(month) ?? 0
-        const cum = (cumByWatch.get(w.id) ?? 0) + inMonth
+        const m = perWatchWeek.get(w.id)!
+        const inWeek = m.get(week) ?? 0
+        const cum = (cumByWatch.get(w.id) ?? 0) + inWeek
         cumByWatch.set(w.id, cum)
         row[w.id] = cum > 0 ? w.acquisitionPriceGbp! / cum : null
       }
@@ -736,11 +740,26 @@ function CostPerWearOverTimeCard({
     // Trim to the active window if a filter is set. We keep cumulative counts
     // accurate by accumulating across the full range above; here we just slice
     // the rows shown.
-    const sinceMonth = since ? since.slice(0, 7) : null
-    const visible = sinceMonth
-      ? fullRows.filter((r) => String(r.month) >= sinceMonth)
+    const sinceWeek = since ? weekKeyOf(since) : null
+    const visible = sinceWeek
+      ? fullRows.filter((r) => String(r.week) >= sinceWeek)
       : fullRows
-    return { rows: visible, eligible }
+
+    // One x-axis label per year — the first visible week whose Monday falls
+    // in a new calendar year. With ~52 rows/year, weekly is way too dense to
+    // label every tick.
+    const seenYears = new Set<number>()
+    const yearTicks: string[] = []
+    for (const r of visible) {
+      const wk = String(r.week)
+      const y = parseISO(wk).getFullYear()
+      if (!seenYears.has(y)) {
+        seenYears.add(y)
+        yearTicks.push(wk)
+      }
+    }
+
+    return { rows: visible, eligible, yearTicks }
   }, [watches, wearLog, since, includeInactive])
 
   const inactiveToggle = (
@@ -775,15 +794,10 @@ function CostPerWearOverTimeCard({
           <LineChart data={rows} margin={{ left: 8, right: 16, top: 8, bottom: 8 }}>
             <CartesianGrid stroke="#f4f4f3" />
             <XAxis
-              dataKey="month"
+              dataKey="week"
               fontSize={10}
-              interval="preserveStartEnd"
-              tickFormatter={(m) => {
-                const [y, mm] = String(m).split('-')
-                const month = parseInt(mm, 10)
-                if (month === 1) return `'${y.slice(2)}`
-                return ''
-              }}
+              ticks={yearTicks}
+              tickFormatter={(d) => `'${format(parseISO(String(d)), 'yy')}`}
             />
             <YAxis
               fontSize={10}
