@@ -75,15 +75,6 @@ export function titleCase(value: string | undefined | null): string {
     .join(' ')
 }
 
-export function slugify(s: string): string {
-  return s
-    .toLowerCase()
-    .normalize('NFD')
-    .replace(/[̀-ͯ]/g, '')
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-+|-+$/g, '')
-}
-
 /** Fix common encoding issues from old exports (e.g. WÄnaka → Wānaka). */
 export function fixEncoding(s: string): string {
   if (!s) return s

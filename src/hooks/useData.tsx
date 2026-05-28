@@ -9,7 +9,6 @@ import {
   type ReactNode,
 } from 'react'
 import type { AppData, AuthConfig } from '../types'
-import { EMPTY_DATA } from '../types'
 import { loadAuth } from '../lib/auth'
 import { loadData, saveData } from '../lib/storage'
 
@@ -121,5 +120,3 @@ export function DataProvider({ children }: DataProviderProps) {
 
   return <DataContext.Provider value={value}>{children}</DataContext.Provider>
 }
-
-export { EMPTY_DATA }

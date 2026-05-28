@@ -4,7 +4,6 @@ const CACHE_KEY = 'watch-collection.geocache.v1'
 
 interface Cache {
   reverse: Record<string, Location>
-  forward: Record<string, Location>
 }
 
 function loadCache(): Cache {
@@ -14,7 +13,7 @@ function loadCache(): Cache {
   } catch {
     /* ignore */
   }
-  return { reverse: {}, forward: {} }
+  return { reverse: {} }
 }
 
 function saveCache(c: Cache): void {
@@ -46,32 +45,6 @@ export async function reverseGeocode(lat: number, lng: number): Promise<Location
     lng,
   }
   cache.reverse[key] = { city: loc.city, region: loc.region, country: loc.country }
-  saveCache(cache)
-  return loc
-}
-
-/** Forward geocode a free-text query to lat/lng + structured place. */
-export async function forwardGeocode(query: string): Promise<Location | null> {
-  const trimmed = query.trim()
-  if (!trimmed) return null
-  const cache = loadCache()
-  if (cache.forward[trimmed.toLowerCase()]) return cache.forward[trimmed.toLowerCase()]
-
-  const url = `https://nominatim.openstreetmap.org/search?format=jsonv2&q=${encodeURIComponent(trimmed)}&limit=1&addressdetails=1`
-  const res = await fetch(url, { headers: { 'Accept-Language': 'en' } })
-  if (!res.ok) return null
-  const arr = await res.json()
-  if (!Array.isArray(arr) || arr.length === 0) return null
-  const top = arr[0]
-  const addr = top.address ?? {}
-  const loc: Location = {
-    city: addr.city || addr.town || addr.village || addr.hamlet || top.name,
-    region: addr.state || addr.region,
-    country: addr.country,
-    lat: parseFloat(top.lat),
-    lng: parseFloat(top.lon),
-  }
-  cache.forward[trimmed.toLowerCase()] = loc
   saveCache(cache)
   return loc
 }

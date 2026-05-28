@@ -1,5 +1,4 @@
 import {
-  addDays,
   addWeeks,
   differenceInDays,
   format,
@@ -247,67 +246,6 @@ export interface ShareRow {
   [watchId: string]: string | number
 }
 
-/**
- * Aggregate monthly share rows into quarterly buckets. Each quarter label is
- * `yyyy-Qn` where n is 1-4. Useful for smoothing very noisy monthly data.
- */
-export function aggregateToQuarters(rows: ShareRow[]): ShareRow[] {
-  const map = new Map<string, ShareRow>()
-  for (const row of rows) {
-    const [yStr, mStr] = (row.month as string).split('-')
-    const y = parseInt(yStr, 10)
-    const m = parseInt(mStr, 10)
-    const q = `${y}-Q${Math.ceil(m / 3)}`
-    if (!map.has(q)) map.set(q, { month: q })
-    const target = map.get(q)!
-    for (const [k, v] of Object.entries(row)) {
-      if (k === 'month') continue
-      const cur = (target[k] as number | undefined) ?? 0
-      target[k] = cur + (v as number)
-    }
-  }
-  return Array.from(map.values()).sort((a, b) =>
-    String(a.month).localeCompare(String(b.month)),
-  )
-}
-
-/**
- * Pick top N contributors by total weight across rows. Anything outside the top
- * gets bucketed into the "__other__" key. Returns the transformed rows plus the
- * ordered top IDs (largest first).
- */
-export function topNPlusOther(
-  rows: ShareRow[],
-  candidateIds: string[],
-  n: number,
-): { rows: ShareRow[]; topIds: string[]; hasOther: boolean } {
-  const totals = new Map<string, number>()
-  for (const row of rows) {
-    for (const id of candidateIds) {
-      const v = (row[id] as number | undefined) ?? 0
-      if (v) totals.set(id, (totals.get(id) ?? 0) + v)
-    }
-  }
-  const sorted = Array.from(totals.entries()).sort((a, b) => b[1] - a[1])
-  const topIds = sorted.slice(0, n).map(([id]) => id)
-  const otherIds = new Set(sorted.slice(n).map(([id]) => id))
-
-  const out: ShareRow[] = rows.map((row) => {
-    const newRow: ShareRow = { month: row.month }
-    let other = 0
-    for (const id of topIds) {
-      const v = (row[id] as number | undefined) ?? 0
-      if (v) newRow[id] = v
-    }
-    for (const id of otherIds) {
-      other += (row[id] as number | undefined) ?? 0
-    }
-    if (other > 0) newRow['__other__'] = other
-    return newRow
-  })
-  return { rows: out, topIds, hasOther: otherIds.size > 0 }
-}
-
 export function watchShareByMonth(watches: Watch[], wearLog: WearLogEntry[]): ShareRow[] {
   const months = new Set<string>()
   for (const e of wearLog) months.add(e.date.slice(0, 7))
@@ -352,16 +290,4 @@ export function fmt(iso: string): string {
   } catch {
     return iso
   }
-}
-
-/** Get an array of every date string in [from, to] inclusive (ISO yyyy-MM-dd). */
-export function dateRange(from: string, to: string): string[] {
-  const out: string[] = []
-  let d = parseISO(from)
-  const end = parseISO(to)
-  while (d.getTime() <= end.getTime()) {
-    out.push(format(d, 'yyyy-MM-dd'))
-    d = addDays(d, 1)
-  }
-  return out
 }

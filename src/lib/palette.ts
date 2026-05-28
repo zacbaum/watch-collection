@@ -74,7 +74,3 @@ function mix(hex: string, target: 'white' | 'black', ratio: number): string {
 export function tint(hex: string, ratio = 0.85): string {
   return mix(hex, 'white', ratio)
 }
-
-export function shade(hex: string, ratio = 0.3): string {
-  return mix(hex, 'black', ratio)
-}
