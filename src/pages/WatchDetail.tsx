@@ -6,7 +6,15 @@ import { Card } from '../components/Card'
 import { Photo } from '../components/Photo'
 import { StatusBadge } from '../components/StatusBadge'
 import { useData, useDataContext } from '../hooks/useData'
-import type { Currency, Money, Watch, WatchCategory, WatchStatus, Movement } from '../types'
+import type {
+  Currency,
+  Money,
+  Watch,
+  WatchCategory,
+  WatchStatus,
+  WearLogEntry,
+  Movement,
+} from '../types'
 import {
   daysSince,
   formatDate,
@@ -20,6 +28,7 @@ import { toGbp } from '../lib/fx'
 import { loadAuth } from '../lib/auth'
 import { uploadPhoto } from '../lib/storage'
 import { ChevronLeft, Trash2, Save, ImagePlus, X } from 'lucide-react'
+import { differenceInDays, parseISO } from 'date-fns'
 
 export function WatchDetail() {
   return (
@@ -156,6 +165,8 @@ function WatchDetailInner() {
         <MetadataView watch={watch} />
       )}
 
+      <WearInsights wears={wears} />
+
       <Card title={`Wear log (${wears.length})`}>
         {wears.length === 0 ? (
           <div className="text-xs text-text-muted">No wears yet.</div>
@@ -198,6 +209,104 @@ function PhotoGallery({ photos }: { photos: string[] }) {
         ))}
       </div>
     </Card>
+  )
+}
+
+function WearInsights({ wears }: { wears: WearLogEntry[] }) {
+  // `wears` arrives sorted newest-first (see WatchDetailInner). Reverse a copy
+  // for chronological scans.
+  const insights = useMemo(() => {
+    const asc = [...wears].sort((a, b) => a.date.localeCompare(b.date))
+    if (asc.length === 0) return null
+
+    // Longest consecutive-day run wearing this watch
+    let bestStreak = 1
+    let curLen = 1
+    for (let i = 1; i < asc.length; i++) {
+      const gap = differenceInDays(parseISO(asc[i].date), parseISO(asc[i - 1].date))
+      curLen = gap === 1 ? curLen + 1 : 1
+      if (curLen > bestStreak) bestStreak = curLen
+    }
+
+    // Longest gap between two wears
+    let bestGap = 0
+    let bestGapFrom: string | undefined
+    let bestGapTo: string | undefined
+    for (let i = 1; i < asc.length; i++) {
+      const gap = differenceInDays(parseISO(asc[i].date), parseISO(asc[i - 1].date))
+      if (gap > bestGap) {
+        bestGap = gap
+        bestGapFrom = asc[i - 1].date
+        bestGapTo = asc[i].date
+      }
+    }
+
+    const avgGap =
+      asc.length < 2
+        ? null
+        : differenceInDays(parseISO(asc[asc.length - 1].date), parseISO(asc[0].date)) /
+          (asc.length - 1)
+
+    const todayMs = Date.now()
+    const within = (days: number) => {
+      const cutoff = todayMs - days * 86_400_000
+      return asc.filter((e) => parseISO(e.date).getTime() >= cutoff).length
+    }
+
+    return {
+      bestStreak,
+      bestGap,
+      bestGapFrom,
+      bestGapTo,
+      avgGap,
+      last30: within(30),
+      last90: within(90),
+      last365: within(365),
+    }
+  }, [wears])
+
+  if (!insights) return null
+
+  return (
+    <Card title="Wear insights">
+      <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+        <InsightTile label="Longest streak" value={`${insights.bestStreak}d`} />
+        <InsightTile
+          label="Longest gap"
+          value={insights.bestGap > 0 ? `${insights.bestGap}d` : '—'}
+          sub={
+            insights.bestGapFrom && insights.bestGapTo
+              ? `${formatDate(insights.bestGapFrom)} → ${formatDate(insights.bestGapTo)}`
+              : undefined
+          }
+        />
+        <InsightTile
+          label="Avg between wears"
+          value={insights.avgGap == null ? '—' : `${insights.avgGap.toFixed(1)}d`}
+        />
+        <InsightTile label="Last 30 days" value={insights.last30} />
+        <InsightTile label="Last 90 days" value={insights.last90} />
+        <InsightTile label="Last 365 days" value={insights.last365} />
+      </div>
+    </Card>
+  )
+}
+
+function InsightTile({
+  label,
+  value,
+  sub,
+}: {
+  label: string
+  value: React.ReactNode
+  sub?: React.ReactNode
+}) {
+  return (
+    <div className="border border-border rounded-md p-2 bg-surface-2/40">
+      <div className="text-[10px] uppercase tracking-wide text-text-muted">{label}</div>
+      <div className="text-base font-semibold mt-0.5 tabular-nums">{value}</div>
+      {sub && <div className="text-[10px] text-text-muted mt-0.5">{sub}</div>}
+    </div>
   )
 }
 
