@@ -48,6 +48,7 @@ function CollectionInner() {
   const data = useData()
   const { mutate } = useDataContext()
   const [status, setStatus] = useState<WatchStatus | 'all'>('owned')
+  const [view, setView] = useState<'list' | 'gallery'>('list')
   const [adding, setAdding] = useState(false)
 
   const counts = useMemo(() => {
@@ -126,6 +127,22 @@ function CollectionInner() {
             </button>
           ))}
         </div>
+        <div className="flex border border-border rounded-md overflow-hidden ml-auto">
+          {(['list', 'gallery'] as const).map((v) => (
+            <button
+              key={v}
+              onClick={() => setView(v)}
+              className={classNames(
+                'px-3 py-1.5 text-xs capitalize',
+                view === v
+                  ? 'bg-surface-2 text-text font-medium'
+                  : 'text-text-muted hover:bg-surface',
+              )}
+            >
+              {v}
+            </button>
+          ))}
+        </div>
       </div>
 
       {filtered.length === 0 ? (
@@ -139,16 +156,24 @@ function CollectionInner() {
         />
       ) : (
         <>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-            {filtered.map((w) => (
-              <WatchTile
-                key={w.id}
-                watch={w}
-                lastWorn={lastWorn.get(w.id)}
-                wearCount={wearCount.get(w.id) ?? 0}
-              />
-            ))}
-          </div>
+          {view === 'list' ? (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+              {filtered.map((w) => (
+                <WatchTile
+                  key={w.id}
+                  watch={w}
+                  lastWorn={lastWorn.get(w.id)}
+                  wearCount={wearCount.get(w.id) ?? 0}
+                />
+              ))}
+            </div>
+          ) : (
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
+              {filtered.map((w) => (
+                <GalleryTile key={w.id} watch={w} />
+              ))}
+            </div>
+          )}
 
           <CompositionSection watches={filtered} />
         </>
@@ -292,6 +317,47 @@ function WatchTile({
             owned for {daysOwned} days
           </div>
         )}
+      </div>
+    </Link>
+  )
+}
+
+function GalleryTile({ watch }: { watch: Watch }) {
+  const muted = watch.status !== 'owned'
+  const accent = colorFor(`${watch.brand}|${watch.model}`)
+  const photo = watch.photos?.[0]
+  return (
+    <Link
+      to={`/collection/${watch.id}`}
+      className={classNames(
+        'group relative block border border-border rounded-lg overflow-hidden bg-surface hover:border-border-strong hover:shadow-sm transition',
+        muted && 'opacity-75',
+      )}
+    >
+      <div
+        className="absolute left-0 top-0 bottom-0 w-1 z-10"
+        style={{ backgroundColor: accent }}
+      />
+      <div className="absolute top-2 right-2 z-10">
+        <StatusBadge status={watch.status} size="xs" />
+      </div>
+      <div className="w-full aspect-square bg-surface-2 flex items-center justify-center">
+        {photo ? (
+          <Photo
+            path={photo}
+            alt={`${watch.brand} ${watch.model}`}
+            className="w-full h-full object-cover"
+          />
+        ) : (
+          <Monogram brand={watch.brand} model={watch.model} size={72} rounded="lg" />
+        )}
+      </div>
+      <div className="px-3 py-2 pl-4">
+        <div className="text-sm font-semibold text-text truncate">{watch.brand}</div>
+        <div className="text-xs text-text-muted truncate">
+          {watch.model}
+          {watch.reference && <span className="text-text-subtle"> · {watch.reference}</span>}
+        </div>
       </div>
     </Link>
   )
