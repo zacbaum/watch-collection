@@ -6,7 +6,7 @@ import { Empty } from '../components/Empty'
 import { useData } from '../hooks/useData'
 import { daysSince, formatDate, formatGbp, todayIso, classNames } from '../lib/utils'
 import { StatusBadge } from '../components/StatusBadge'
-import { ArrowRight, Plus, Check } from 'lucide-react'
+import { ArrowRight, Plus, Check, Cake } from 'lucide-react'
 
 export function Home() {
   return (
@@ -67,6 +67,42 @@ function HomeInner() {
     .slice(0, 5)
 
   const recent = [...data.wearLog].sort((a, b) => b.date.localeCompare(a.date)).slice(0, 6)
+
+  // Upcoming acquisition anniversaries within the next 30 days (owned only).
+  const ANNIVERSARY_HORIZON_DAYS = 30
+  const now = new Date()
+  const todayMid = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime()
+  const upcomingAnniversaries: Array<{
+    watchId: string
+    brand: string
+    model: string
+    date: Date
+    years: number
+    daysUntil: number
+  }> = []
+  for (const w of owned) {
+    if (!w.acquisitionDate) continue
+    const [acqY, acqM, acqD] = w.acquisitionDate.split('-').map(Number)
+    if (!acqY || !acqM || !acqD) continue
+    // Anniversary in current year — bump to next year if it's already passed
+    const tM = now.getMonth() + 1
+    const tD = now.getDate()
+    const inYear = tM > acqM || (tM === acqM && tD > acqD) ? now.getFullYear() + 1 : now.getFullYear()
+    const next = new Date(inYear, acqM - 1, acqD)
+    const daysUntil = Math.round((next.getTime() - todayMid) / 86_400_000)
+    if (daysUntil < 0 || daysUntil > ANNIVERSARY_HORIZON_DAYS) continue
+    const years = inYear - acqY
+    if (years <= 0) continue
+    upcomingAnniversaries.push({
+      watchId: w.id,
+      brand: w.brand,
+      model: w.model,
+      date: next,
+      years,
+      daysUntil,
+    })
+  }
+  upcomingAnniversaries.sort((a, b) => a.daysUntil - b.daysUntil)
 
   if (data.watches.length === 0) {
     return (
@@ -137,6 +173,35 @@ function HomeInner() {
           </>
         )}
       </Link>
+
+      {upcomingAnniversaries.length > 0 && (
+        <div className="border border-border bg-surface rounded-lg p-3">
+          <div className="text-[11px] uppercase tracking-wide text-text-muted flex items-center gap-1.5 mb-1.5">
+            <Cake size={12} /> Upcoming anniversaries
+          </div>
+          <ul className="space-y-1">
+            {upcomingAnniversaries.map((a) => (
+              <li key={a.watchId} className="flex items-baseline justify-between gap-2 text-sm">
+                <Link
+                  to={`/collection/${a.watchId}`}
+                  className="truncate hover:underline"
+                >
+                  <span className="text-text">{a.brand}</span>{' '}
+                  <span className="text-text-muted">{a.model}</span>
+                </Link>
+                <span className="text-xs text-text-muted whitespace-nowrap">
+                  {a.years} {a.years === 1 ? 'year' : 'years'} ·{' '}
+                  {a.daysUntil === 0
+                    ? 'today'
+                    : a.daysUntil === 1
+                      ? 'tomorrow'
+                      : `in ${a.daysUntil} days`}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
 
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
         <Stat label="Owned" value={owned.length} sub={`${data.watches.length} total tracked`} />
