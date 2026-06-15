@@ -1408,7 +1408,13 @@ function TravelCompanionCard({
           <ResponsiveContainer width="100%" height="100%">
             <BarChart data={rows} layout="vertical" margin={{ left: 8, right: 8 }}>
               <CartesianGrid stroke="#f4f4f3" />
-              <XAxis type="number" fontSize={10} />
+              <XAxis
+                type="number"
+                scale="log"
+                domain={[1, 'auto']}
+                allowDataOverflow
+                fontSize={10}
+              />
               <YAxis
                 dataKey="name"
                 type="category"
@@ -1453,6 +1459,19 @@ function TravelCompanionCard({
   )
 }
 
+/** Case- and punctuation-insensitive key so e.g. "St. Kitts" / "Saint Kitts"
+ *  / "St Kitts" collapse onto one location. Display string keeps the first
+ *  variant we saw. */
+function normalizeLocPart(s: string | undefined): string {
+  return (s ?? '')
+    .toLowerCase()
+    .replace(/[.,]/g, '')
+    .replace(/^saint\s+/, 'st ')
+    .replace(/\s+saint\s+/, ' st ')
+    .replace(/\s+/g, ' ')
+    .trim()
+}
+
 function TravelMapCard({ wearLog }: { wearLog: WearLogEntry[] }) {
   const { resolvedPoints, unresolvedCount } = useMemo(() => {
     const groups = new Map<
@@ -1461,7 +1480,7 @@ function TravelMapCard({ wearLog }: { wearLog: WearLogEntry[] }) {
     >()
     for (const e of wearLog) {
       if (!e.location?.city && !e.location?.country) continue
-      const key = [e.location.city, e.location.country].filter(Boolean).join('|')
+      const key = `${normalizeLocPart(e.location.city)}|${normalizeLocPart(e.location.country)}`
       const existing = groups.get(key)
       if (existing) {
         existing.count += 1
