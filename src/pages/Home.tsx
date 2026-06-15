@@ -256,7 +256,7 @@ function HomeInner() {
           <div className="text-[11px] uppercase tracking-wide text-text-muted">
             Dormant capital
           </div>
-          <div className="mt-1 text-2xl font-semibold text-text">
+          <div className="mt-1 text-3xl font-semibold text-text tabular-nums">
             {dormantValue > 0 ? formatGbp(dormantValue) : '—'}
           </div>
           <div className="text-xs text-text-muted mt-0.5">

@@ -195,10 +195,20 @@ function WatchDetailInner() {
         <ChevronLeft size={12} /> Collection
       </Link>
 
+      {!editing && watch.photos && watch.photos.length > 0 && (
+        <div className="-mx-4 sm:mx-0 sm:rounded-xl overflow-hidden bg-surface-2">
+          <Photo
+            path={watch.photos[0]}
+            alt={`${watch.brand} ${watch.model}`}
+            className="w-full aspect-[16/9] object-cover"
+          />
+        </div>
+      )}
+
       <div className="flex items-start justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight">{watch.brand}</h1>
-          <div className="text-sm text-text-muted">
+          <h1 className="text-3xl font-display font-medium tracking-tight leading-tight">{watch.brand}</h1>
+          <div className="text-sm text-text-muted mt-0.5">
             {watch.model}
             {watch.reference && ` · Ref ${watch.reference}`}
           </div>
@@ -251,8 +261,8 @@ function WatchDetailInner() {
 
       {watch.status === 'sold' && <SaleSummary watch={watch} />}
 
-      {!editing && watch.photos && watch.photos.length > 0 && (
-        <PhotoGallery photos={watch.photos} />
+      {!editing && watch.photos && watch.photos.length > 1 && (
+        <PhotoGallery photos={watch.photos.slice(1)} />
       )}
 
       {editing ? (
@@ -443,10 +453,10 @@ function SaleSummary({ watch }: { watch: Watch }) {
 
 function Tile({ label, value, sub }: { label: string; value: React.ReactNode; sub?: React.ReactNode }) {
   return (
-    <div className="border border-border rounded-lg p-3 bg-surface">
+    <div className="border border-border rounded-lg p-4 bg-surface">
       <div className="text-[11px] uppercase tracking-wide text-text-muted">{label}</div>
-      <div className="text-lg font-semibold">{value}</div>
-      {sub && <div className="text-[11px] text-text-muted">{sub}</div>}
+      <div className="mt-1 text-2xl font-semibold tabular-nums">{value}</div>
+      {sub && <div className="text-[11px] text-text-muted mt-0.5">{sub}</div>}
     </div>
   )
 }

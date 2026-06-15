@@ -40,7 +40,7 @@ export function Stat({
   return (
     <div className="border border-border rounded-lg p-4 bg-surface">
       <div className="text-[11px] uppercase tracking-wide text-text-muted">{label}</div>
-      <div className="mt-1 text-2xl font-semibold text-text">{value}</div>
+      <div className="mt-1 text-3xl font-semibold text-text tabular-nums">{value}</div>
       {sub && <div className="text-xs text-text-muted mt-0.5">{sub}</div>}
     </div>
   )
