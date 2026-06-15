@@ -1,8 +1,8 @@
-import { useState, type FormEvent } from 'react'
+import { useMemo, useState, type FormEvent } from 'react'
 import { useDataContext } from '../hooks/useData'
 import { clearAuth, saveAuth, verifyAuth } from '../lib/auth'
 import { importFromCsv, mergeImport } from '../lib/importer'
-import type { AppData, AuthConfig, Watch } from '../types'
+import type { AppData, AuthConfig, Watch, WearLogEntry } from '../types'
 import { Card } from '../components/Card'
 import { CheckCircle2, AlertCircle, Upload, Trash2, LogOut } from 'lucide-react'
 import {
@@ -225,6 +225,34 @@ export function Settings() {
               message: `Backfill specs for ${result.updatedCount} watches`,
             })
             return result
+          }}
+        />
+      )}
+
+      {state.kind === 'ready' && (
+        <LocationMergeSection
+          wearLog={state.data.wearLog}
+          onMerge={async (entryIds, target) => {
+            const ids = new Set(entryIds)
+            await mutate(
+              (d) => ({
+                ...d,
+                wearLog: d.wearLog.map((e) => {
+                  if (!ids.has(e.id) || !e.location) return e
+                  return {
+                    ...e,
+                    location: {
+                      ...e.location,
+                      city: target.city || undefined,
+                      country: target.country || undefined,
+                    },
+                  }
+                }),
+              }),
+              {
+                message: `Merge ${entryIds.length} wear locations → ${target.city || target.country}`,
+              },
+            )
           }}
         />
       )}
@@ -463,6 +491,193 @@ function SpecBackfillSection({
       {result && result.unknownKeys.length > 0 && (
         <div className="mt-1 text-[11px] text-danger">
           Unknown keys (skipped): {result.unknownKeys.join(', ')}
+        </div>
+      )}
+    </Card>
+  )
+}
+
+// ─── Location merge tool ────────────────────────────────────────────────────
+
+interface MergeTarget {
+  city?: string
+  country?: string
+}
+
+interface LocVariant {
+  city?: string
+  country?: string
+  count: number
+  entryIds: string[]
+}
+
+interface LocCluster {
+  key: string
+  variants: LocVariant[]
+}
+
+/** Aggressive normaliser used only for clustering — folds diacritics,
+ *  &/and, Saint/St, punctuation, and case. False positives are OK because
+ *  the user confirms each merge. */
+function looseLocNorm(s: string | undefined): string {
+  return (s ?? '')
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[̀-ͯ]/g, '')
+    .replace(/&/g, 'and')
+    .replace(/[.,'\-]/g, ' ')
+    .replace(/\bsaint\b/g, 'st')
+    .replace(/\s+/g, ' ')
+    .trim()
+}
+
+function buildLocClusters(wearLog: WearLogEntry[]): LocCluster[] {
+  // Step 1: tally each exact (city, country) tuple
+  const tuples = new Map<string, LocVariant>()
+  for (const e of wearLog) {
+    if (!e.location?.city && !e.location?.country) continue
+    const city = e.location.city
+    const country = e.location.country
+    const tupKey = `${city ?? ''}|${country ?? ''}`
+    const existing = tuples.get(tupKey)
+    if (existing) {
+      existing.count++
+      existing.entryIds.push(e.id)
+    } else {
+      tuples.set(tupKey, { city, country, count: 1, entryIds: [e.id] })
+    }
+  }
+  // Step 2: group tuples by loose-normalised key
+  const clusterMap = new Map<string, LocCluster>()
+  for (const t of tuples.values()) {
+    const looseKey = `${looseLocNorm(t.city)}|${looseLocNorm(t.country)}`
+    const c = clusterMap.get(looseKey)
+    if (c) c.variants.push(t)
+    else clusterMap.set(looseKey, { key: looseKey, variants: [t] })
+  }
+  // Step 3: keep only clusters with >1 variant; sort variants by count desc
+  return Array.from(clusterMap.values())
+    .filter((c) => c.variants.length > 1)
+    .map((c) => ({
+      ...c,
+      variants: c.variants.sort((a, b) => b.count - a.count),
+    }))
+    .sort((a, b) => {
+      // Heaviest clusters first
+      const at = a.variants.reduce((s, v) => s + v.count, 0)
+      const bt = b.variants.reduce((s, v) => s + v.count, 0)
+      return bt - at
+    })
+}
+
+function formatVariant(v: LocVariant): string {
+  return [v.city, v.country].filter(Boolean).join(', ') || '(unlabeled)'
+}
+
+function variantKey(v: LocVariant): string {
+  return `${v.city ?? ''}|${v.country ?? ''}`
+}
+
+function LocationMergeSection({
+  wearLog,
+  onMerge,
+}: {
+  wearLog: WearLogEntry[]
+  onMerge: (entryIds: string[], target: MergeTarget) => Promise<void>
+}) {
+  const clusters = useMemo(() => buildLocClusters(wearLog), [wearLog])
+  // Per-cluster chosen canonical (defaults to the most-common variant)
+  const [canonical, setCanonical] = useState<Record<string, string>>({})
+  const [busyKey, setBusyKey] = useState<string | null>(null)
+  const [msg, setMsg] = useState<string | null>(null)
+
+  if (clusters.length === 0) {
+    return (
+      <Card title="Merge duplicate locations">
+        <div className="text-xs text-text-muted">
+          No likely-duplicate location clusters found. Anything you do see on
+          the map as duplicates may genuinely be distinct strings — paste an
+          example and I'll add a rule.
+        </div>
+      </Card>
+    )
+  }
+
+  async function applyCluster(c: LocCluster) {
+    const targetKey = canonical[c.key] ?? variantKey(c.variants[0])
+    const target = c.variants.find((v) => variantKey(v) === targetKey)
+    if (!target) return
+    const otherVariants = c.variants.filter((v) => variantKey(v) !== targetKey)
+    const entryIds = otherVariants.flatMap((v) => v.entryIds)
+    if (entryIds.length === 0) {
+      setMsg('Nothing to merge — only the canonical variant has entries.')
+      return
+    }
+    setBusyKey(c.key)
+    setMsg(null)
+    try {
+      await onMerge(entryIds, { city: target.city, country: target.country })
+      setMsg(`Merged ${entryIds.length} entries into "${formatVariant(target)}".`)
+    } catch (e) {
+      setMsg(`Merge failed: ${(e as Error).message}`)
+    } finally {
+      setBusyKey(null)
+    }
+  }
+
+  return (
+    <Card title={`Merge duplicate locations (${clusters.length} cluster${clusters.length === 1 ? '' : 's'})`}>
+      <div className="text-xs text-text-muted mb-3">
+        Wear log entries that probably refer to the same place but were
+        recorded with different spellings. Pick the canonical name per
+        cluster and apply — the entries are rewritten in place.
+      </div>
+      <div className="space-y-3">
+        {clusters.map((c) => {
+          const defaultTarget = variantKey(c.variants[0])
+          const chosen = canonical[c.key] ?? defaultTarget
+          return (
+            <div key={c.key} className="border border-border rounded-md p-3 bg-surface">
+              <div className="space-y-1.5 mb-2">
+                {c.variants.map((v) => {
+                  const vKey = variantKey(v)
+                  return (
+                    <label
+                      key={vKey}
+                      className="flex items-center gap-2 text-xs cursor-pointer"
+                    >
+                      <input
+                        type="radio"
+                        name={`canon-${c.key}`}
+                        checked={chosen === vKey}
+                        onChange={() =>
+                          setCanonical((prev) => ({ ...prev, [c.key]: vKey }))
+                        }
+                        className="accent-accent"
+                      />
+                      <span className="text-text">{formatVariant(v)}</span>
+                      <span className="text-text-subtle ml-auto tabular-nums">
+                        {v.count} {v.count === 1 ? 'wear' : 'wears'}
+                      </span>
+                    </label>
+                  )
+                })}
+              </div>
+              <button
+                type="button"
+                onClick={() => void applyCluster(c)}
+                disabled={busyKey === c.key}
+                className="px-2 py-1 text-[11px] rounded-md bg-accent text-white disabled:opacity-50"
+              >
+                {busyKey === c.key ? 'Merging…' : 'Merge into selected'}
+              </button>
+            </div>
+          )
+        })}
+      </div>
+      {msg && (
+        <div className="text-xs text-success mt-3 flex items-center gap-1">
+          <CheckCircle2 size={14} /> {msg}
         </div>
       )}
     </Card>
