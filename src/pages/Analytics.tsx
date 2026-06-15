@@ -50,6 +50,7 @@ import {
   rangeSince,
   rotationDiversityByMonth,
   rotationScore,
+  sellabilityRanking,
   watchShareByMonth,
   weekKeyOf,
   weekKeysInRange,
@@ -140,6 +141,12 @@ function AnalyticsInner() {
         <CashFlowCard watches={data.watches} />
         <WatchFlowCard watches={data.watches} />
       </div>
+
+      <SellabilityCard
+        watches={data.watches}
+        wearLog={data.wearLog}
+        watchColors={watchColors}
+      />
 
       <WatchYearHeatmapCard
         watches={data.watches}
@@ -1198,6 +1205,95 @@ interface MapPoint {
 }
 
 // ─── Behaviour-pattern cards ────────────────────────────────────────────────
+
+function SellabilityCard({
+  watches,
+  wearLog,
+  watchColors,
+}: {
+  watches: Watch[]
+  wearLog: WearLogEntry[]
+  watchColors: Map<string, string>
+}) {
+  const rows = useMemo(() => sellabilityRanking(watches, wearLog), [watches, wearLog])
+  const watchById = useMemo(() => new Map(watches.map((w) => [w.id, w])), [watches])
+
+  if (rows.length === 0) {
+    return (
+      <Card title="Sellability">
+        <div className="text-xs text-text-muted">No owned watches to rank.</div>
+      </Card>
+    )
+  }
+
+  function scoreColor(score: number): string {
+    if (score >= 60) return 'var(--color-danger)'
+    if (score >= 35) return 'var(--color-warning)'
+    return 'var(--color-success)'
+  }
+
+  return (
+    <Card title="Sellability · owned watches ranked by wear-pattern signals">
+      <div className="text-[11px] text-text-muted mb-3">
+        Higher = more sellable. Composite of dormancy (35%), wear-rate drop-off
+        vs lifetime (25%), one-off-ness (20%), and total under-use (20%). Pure
+        wear-pattern derived — no price input.
+      </div>
+      <ul className="divide-y divide-border -mx-3 sm:-mx-4">
+        {rows.map((r) => {
+          const w = watchById.get(r.watchId)
+          if (!w) return null
+          const color = watchColors.get(w.id) ?? '#cccccc'
+          return (
+            <li
+              key={r.watchId}
+              className="px-3 sm:px-4 py-2 grid grid-cols-[1fr_auto] gap-3 items-center"
+            >
+              <div className="min-w-0">
+                <div className="flex items-center gap-2 min-w-0">
+                  <span
+                    className="inline-block w-2.5 h-2.5 rounded-sm shrink-0"
+                    style={{ backgroundColor: color }}
+                  />
+                  <span className="text-sm text-text truncate">
+                    {w.brand}{' '}
+                    <span className="text-text-muted">{w.model}</span>
+                  </span>
+                </div>
+                <div className="text-[11px] text-text-muted mt-0.5 truncate">
+                  {r.rationale} · {r.wearsTotal} total wear{r.wearsTotal === 1 ? '' : 's'}
+                  {r.wearsLast365 !== r.wearsTotal && (
+                    <> · {r.wearsLast365} in last 365d</>
+                  )}
+                </div>
+              </div>
+              <div className="flex items-center gap-2 shrink-0">
+                <div
+                  className="w-24 h-1.5 rounded-full bg-surface-2 overflow-hidden"
+                  title={`${r.score}/100`}
+                >
+                  <div
+                    className="h-full rounded-full"
+                    style={{
+                      width: `${r.score}%`,
+                      backgroundColor: scoreColor(r.score),
+                    }}
+                  />
+                </div>
+                <div
+                  className="text-sm font-semibold tabular-nums w-8 text-right"
+                  style={{ color: scoreColor(r.score) }}
+                >
+                  {r.score}
+                </div>
+              </div>
+            </li>
+          )
+        })}
+      </ul>
+    </Card>
+  )
+}
 
 function WatchYearHeatmapCard({
   watches,
