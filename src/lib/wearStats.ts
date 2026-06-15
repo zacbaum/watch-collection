@@ -293,13 +293,15 @@ export function yearsCovered(wearLog: WearLogEntry[]): number[] {
 //
 // Three components, weighted:
 //
-//   • Dormancy   (40%)  — days since last worn, sqrt(d/365) — already 0.5 at
-//                         90 days idle; saturates at 365d
-//   • Drop-off   (35%)  — recent (last 365d) wear rate vs lifetime rate;
-//                         fires once owned > 90 days
-//   • One-off    (25%)  — never worn / worn once / worn in a tight burst then
-//                         abandoned; gated on 60+ days owned so brand-new
-//                         purchases aren't unfairly flagged
+//   • Dormancy   (45%)  — days since last worn, sqrt(d/180). Saturates at
+//                         6 months idle (90 days ≈ 0.71). Never-worn = 1.0
+//   • Drop-off   (40%)  — recent (last 365d) wear rate vs lifetime rate;
+//                         fires once owned > 90 days. Never-worn after that
+//                         counts as the maximum drop-off signal (1.0)
+//   • One-off    (15%)  — special-case bonus when a watch is clearly a
+//                         single-wear or short-burst purchase that never
+//                         made it into rotation; gated on 60+ days owned
+//                         so brand-new purchases aren't unfairly flagged
 //
 // Each component is clamped to [0, 1]; the score is the weighted sum × 100.
 // The rationale field surfaces the single biggest contributor in plain English
@@ -341,21 +343,29 @@ export function sellabilityForWatch(
   const wearsLast365 = wears.filter((d) => parseISO(d).getTime() >= cutoffMs).length
 
   // ─ Component 1: dormancy ─────────────────────────────────────
-  // sqrt curve ramps faster than linear at the start:
-  //   30d  → 0.29     90d  → 0.50     180d → 0.70     365d → 1.00
+  // sqrt(d/180) — saturates at 6 months idle. Harsher than the previous
+  // 12-month saturation, matching the user's daily-logging cadence:
+  //   30d  → 0.41     60d  → 0.58     90d  → 0.71     180d → 1.00
   // Never-worn = 1.0.
   const dormancy =
-    daysSinceWorn == null ? 1 : Math.min(Math.sqrt(daysSinceWorn / 365), 1)
+    daysSinceWorn == null ? 1 : Math.min(Math.sqrt(daysSinceWorn / 180), 1)
 
   // ─ Component 2: drop-off (recent rate vs lifetime rate) ──────
   // Gated on 90+ days owned so noisy brand-new watches don't dominate.
+  // Never-worn after that threshold counts as maximum drop-off — there's no
+  // historical rate to drop off from, but the absence of any wear over a
+  // quarter is itself the signal.
   let dropoff = 0
-  if (daysOwned != null && daysOwned > 90 && wearsTotal > 0) {
-    const recentWindow = Math.min(daysOwned, 365)
-    const recentRate = wearsLast365 / recentWindow
-    const historicalRate = wearsTotal / daysOwned
-    if (historicalRate > 0) {
-      dropoff = Math.max(0, Math.min(1, 1 - recentRate / historicalRate))
+  if (daysOwned != null && daysOwned > 90) {
+    if (wearsTotal === 0) {
+      dropoff = 1
+    } else {
+      const recentWindow = Math.min(daysOwned, 365)
+      const recentRate = wearsLast365 / recentWindow
+      const historicalRate = wearsTotal / daysOwned
+      if (historicalRate > 0) {
+        dropoff = Math.max(0, Math.min(1, 1 - recentRate / historicalRate))
+      }
     }
   }
 
@@ -368,25 +378,25 @@ export function sellabilityForWatch(
   } else if (daysOwned != null && daysOwned >= 60) {
     if (wearsTotal === 1) {
       oneOff = 1
-    } else if (wearsTotal <= 5 && daysSinceWorn != null && daysSinceWorn > 90) {
-      oneOff = 0.7
+    } else if (wearsTotal <= 5 && daysSinceWorn != null && daysSinceWorn > 60) {
+      oneOff = 0.8
     } else if (firstWornDate && lastWornDate && daysSinceWorn != null) {
       const span = Math.max(
         1,
         differenceInDays(parseISO(lastWornDate), parseISO(firstWornDate)),
       )
       const spanRatio = span / daysOwned
-      if (spanRatio < 0.3 && daysSinceWorn > 60) oneOff = 0.5
+      if (spanRatio < 0.4 && daysSinceWorn > 60) oneOff = 0.6
     }
   }
 
-  const score = Math.round(100 * (0.4 * dormancy + 0.35 * dropoff + 0.25 * oneOff))
+  const score = Math.round(100 * (0.45 * dormancy + 0.4 * dropoff + 0.15 * oneOff))
 
   // ─ Rationale: pick the largest contributor and translate to plain words ─
   const contributions: Array<{ key: string; weighted: number }> = [
-    { key: 'dormancy', weighted: 0.4 * dormancy },
-    { key: 'dropoff', weighted: 0.35 * dropoff },
-    { key: 'oneOff', weighted: 0.25 * oneOff },
+    { key: 'dormancy', weighted: 0.45 * dormancy },
+    { key: 'dropoff', weighted: 0.4 * dropoff },
+    { key: 'oneOff', weighted: 0.15 * oneOff },
   ]
   contributions.sort((a, b) => b.weighted - a.weighted)
   const top = contributions[0]

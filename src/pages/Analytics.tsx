@@ -1235,9 +1235,10 @@ function SellabilityCard({
   return (
     <Card title="Sellability · owned watches ranked by wear-pattern signals">
       <div className="text-[11px] text-text-muted mb-3">
-        Higher = more sellable. Composite of dormancy (35%), wear-rate drop-off
-        vs lifetime (25%), one-off-ness (20%), and total under-use (20%). Pure
-        wear-pattern derived — no price input.
+        Higher = more sellable. Composite of dormancy (45%, saturates at 6
+        months idle), wear-rate drop-off vs lifetime (40%, never-worn after
+        90 days = max signal), and one-off-ness (15%, brief-fling bonus).
+        Pure wear-pattern derived — no price input.
       </div>
       <ul className="divide-y divide-border -mx-3 sm:-mx-4">
         {rows.map((r) => {
