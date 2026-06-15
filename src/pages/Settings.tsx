@@ -2,7 +2,7 @@ import { useMemo, useState, type FormEvent } from 'react'
 import { useDataContext } from '../hooks/useData'
 import { clearAuth, saveAuth, verifyAuth } from '../lib/auth'
 import { importFromCsv, mergeImport } from '../lib/importer'
-import type { AppData, AuthConfig, Watch, WearLogEntry } from '../types'
+import type { AuthConfig, WearLogEntry } from '../types'
 import { Card } from '../components/Card'
 import { CheckCircle2, AlertCircle, Upload, Trash2, LogOut } from 'lucide-react'
 import {
@@ -217,19 +217,6 @@ export function Settings() {
       )}
 
       {state.kind === 'ready' && (
-        <SpecBackfillSection
-          watches={state.data.watches}
-          onApply={async (patch) => {
-            const result = applySpecPatch(state.data, patch)
-            await mutate(() => result.next, {
-              message: `Backfill specs for ${result.updatedCount} watches`,
-            })
-            return result
-          }}
-        />
-      )}
-
-      {state.kind === 'ready' && (
         <LocationMergeSection
           wearLog={state.data.wearLog}
           onMerge={async (entryIds, target) => {
@@ -336,164 +323,6 @@ function Field({
         className="mt-1 block w-full text-sm px-2.5 py-1.5 border border-border rounded-md bg-bg text-text focus:outline-none focus:border-accent"
       />
     </label>
-  )
-}
-
-// ─── Spec backfill ──────────────────────────────────────────────────────────
-
-/** Fields the backfill tool is allowed to set on a watch. */
-const PATCHABLE_FIELDS = [
-  'caseDiameterMm',
-  'caseThicknessMm',
-  'lugWidthMm',
-  'waterResistanceM',
-] as const
-type PatchableField = (typeof PATCHABLE_FIELDS)[number]
-type SpecPatch = Record<string, Partial<Record<PatchableField, number>>>
-
-interface PatchResult {
-  next: AppData
-  updatedCount: number
-  unknownKeys: string[]
-  changedFields: number
-}
-
-/** Apply a patch dict to a copy of AppData, only touching the patchable fields.
- *  Keys can be either watch IDs or `brand|model|reference` strings. */
-function applySpecPatch(data: AppData, patch: SpecPatch): PatchResult {
-  const byId = new Map(data.watches.map((w) => [w.id, w]))
-  const byKey = new Map<string, Watch>()
-  for (const w of data.watches) {
-    byKey.set(`${w.brand}|${w.model}|${w.reference ?? ''}`.toLowerCase(), w)
-  }
-
-  const touched = new Map<string, Watch>()
-  const unknown: string[] = []
-  let changedFields = 0
-
-  for (const [rawKey, values] of Object.entries(patch)) {
-    const target =
-      byId.get(rawKey) ??
-      byKey.get(rawKey.toLowerCase()) ??
-      byKey.get(`${rawKey}|`.toLowerCase())
-    if (!target) {
-      unknown.push(rawKey)
-      continue
-    }
-    const current = touched.get(target.id) ?? { ...target }
-    for (const f of PATCHABLE_FIELDS) {
-      const v = values[f]
-      if (typeof v === 'number' && Number.isFinite(v) && current[f] !== v) {
-        ;(current as unknown as Record<string, unknown>)[f] = v
-        changedFields++
-      }
-    }
-    current.updatedAt = new Date().toISOString()
-    touched.set(target.id, current)
-  }
-
-  const next: AppData = {
-    ...data,
-    watches: data.watches.map((w) => touched.get(w.id) ?? w),
-    updatedAt: new Date().toISOString(),
-  }
-  return { next, updatedCount: touched.size, unknownKeys: unknown, changedFields }
-}
-
-function SpecBackfillSection({
-  watches,
-  onApply,
-}: {
-  watches: Watch[]
-  onApply: (patch: SpecPatch) => Promise<PatchResult>
-}) {
-  const [text, setText] = useState('')
-  const [busy, setBusy] = useState(false)
-  const [err, setErr] = useState<string | null>(null)
-  const [result, setResult] = useState<PatchResult | null>(null)
-
-  async function handleApply() {
-    setBusy(true)
-    setErr(null)
-    setResult(null)
-    try {
-      const parsed = JSON.parse(text) as unknown
-      if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
-        throw new Error('Patch must be a JSON object keyed by watch id (or brand|model|reference).')
-      }
-      const r = await onApply(parsed as SpecPatch)
-      setResult(r)
-      if (r.unknownKeys.length === 0) setText('')
-    } catch (e) {
-      setErr((e as Error).message)
-    } finally {
-      setBusy(false)
-    }
-  }
-
-  return (
-    <Card title="Backfill watch specs">
-      <div className="text-xs text-text-muted mb-3">
-        Paste a JSON map keyed by watch id (or{' '}
-        <code className="px-1 bg-surface-2 rounded">brand|model|reference</code>) with any of{' '}
-        <code className="px-1 bg-surface-2 rounded">caseDiameterMm</code>,{' '}
-        <code className="px-1 bg-surface-2 rounded">caseThicknessMm</code>,{' '}
-        <code className="px-1 bg-surface-2 rounded">lugWidthMm</code>,{' '}
-        <code className="px-1 bg-surface-2 rounded">waterResistanceM</code>. Other fields and
-        unmentioned watches are left untouched.
-      </div>
-      <details className="mb-2 text-[11px] text-text-muted">
-        <summary className="cursor-pointer select-none">
-          Show watch ids in this collection ({watches.length})
-        </summary>
-        <ul className="mt-1 max-h-40 overflow-y-auto font-mono space-y-0.5">
-          {watches.map((w) => (
-            <li key={w.id}>
-              <code className="text-text">{w.id}</code>{' '}
-              <span className="text-text-subtle">
-                {w.brand} {w.model}
-                {w.reference ? ` · ${w.reference}` : ''}
-              </span>
-            </li>
-          ))}
-        </ul>
-      </details>
-      <textarea
-        value={text}
-        onChange={(e) => setText(e.target.value)}
-        rows={8}
-        placeholder={`{\n  "w_xxxxxxx": { "caseDiameterMm": 40, "waterResistanceM": 100 }\n}`}
-        className="w-full font-mono text-xs px-2 py-1.5 border border-border rounded-md bg-bg"
-      />
-      <div className="mt-2 flex items-center gap-2">
-        <button
-          onClick={handleApply}
-          disabled={busy || !text.trim()}
-          className="px-3 py-1.5 text-xs rounded-md bg-accent text-white disabled:opacity-50"
-        >
-          {busy ? 'Applying…' : 'Apply patch'}
-        </button>
-        {err && (
-          <span className="text-xs text-danger flex items-center gap-1">
-            <AlertCircle size={14} /> {err}
-          </span>
-        )}
-        {result && (
-          <span className="text-xs text-success flex items-center gap-1">
-            <CheckCircle2 size={14} />
-            Patched {result.updatedCount} watch{result.updatedCount === 1 ? '' : 'es'} ·{' '}
-            {result.changedFields} field{result.changedFields === 1 ? '' : 's'} changed
-            {result.unknownKeys.length > 0 &&
-              ` · ${result.unknownKeys.length} unknown key${result.unknownKeys.length === 1 ? '' : 's'}`}
-          </span>
-        )}
-      </div>
-      {result && result.unknownKeys.length > 0 && (
-        <div className="mt-1 text-[11px] text-danger">
-          Unknown keys (skipped): {result.unknownKeys.join(', ')}
-        </div>
-      )}
-    </Card>
   )
 }
 
