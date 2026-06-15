@@ -204,7 +204,7 @@ function LogWearInner() {
 
   return (
     <div className="space-y-4 max-w-md">
-      <h1 className="text-xl font-semibold">Log wear</h1>
+      <h1 className="text-2xl font-display font-medium tracking-tight">Log wear</h1>
 
       {existingEntry && existingWatch && (
         <div className="rounded-lg border border-border bg-surface px-3 py-2.5 flex items-center gap-3 text-xs">

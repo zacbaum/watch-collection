@@ -66,7 +66,7 @@ function WishlistInner() {
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between gap-3">
-        <h1 className="text-xl font-semibold">Wishlist</h1>
+        <h1 className="text-2xl font-display font-medium tracking-tight">Wishlist</h1>
         <button
           onClick={() => setAdding((a) => !a)}
           className="px-3 py-1.5 text-xs rounded-md bg-accent text-white flex items-center gap-1"

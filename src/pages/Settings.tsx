@@ -72,7 +72,7 @@ export function Settings() {
 
   return (
     <div className="space-y-6">
-      <h1 className="text-xl font-semibold">Settings</h1>
+      <h1 className="text-2xl font-display font-medium tracking-tight">Settings</h1>
 
       <Card title="Appearance">
         <div className="space-y-4">

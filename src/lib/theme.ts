@@ -31,7 +31,9 @@ const MODE_KEY = 'watch-collection.mode.v1'
 export function getTheme(): ThemeName {
   const v = localStorage.getItem(THEME_KEY)
   if (THEMES.some((t) => t.key === v)) return v as ThemeName
-  return 'default'
+  // Default to "warm" for the editorial Lugs-inspired feel on fresh installs.
+  // Existing users keep whatever they've already picked.
+  return 'warm'
 }
 
 export function getMode(): ModeName {

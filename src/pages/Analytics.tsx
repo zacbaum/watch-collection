@@ -89,7 +89,7 @@ function AnalyticsInner() {
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between flex-wrap gap-2">
-        <h1 className="text-xl font-semibold">Analytics</h1>
+        <h1 className="text-2xl font-display font-medium tracking-tight">Analytics</h1>
         <TimeRangeFilter value={range} onChange={setRange} />
       </div>
 
