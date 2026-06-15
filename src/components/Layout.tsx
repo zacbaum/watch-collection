@@ -34,7 +34,7 @@ export function Layout({ children }: LayoutProps) {
 
   return (
     <div className="min-h-screen flex flex-col bg-bg text-text">
-      <header className="border-b border-border bg-surface sticky top-0 z-30">
+      <header className="border-b border-border bg-surface/70 backdrop-blur-md sticky top-0 z-30">
         <div className="max-w-6xl mx-auto px-4 h-12 flex items-center gap-4">
           <NavLink to="/" className="font-mono text-sm tracking-tight font-semibold">
             ⌚ watch-collection
@@ -76,10 +76,12 @@ export function Layout({ children }: LayoutProps) {
       </header>
 
       <main className="flex-1 max-w-6xl w-full mx-auto px-4 pt-4 pb-24 sm:pb-8">
-        {children}
+        <div key={location.pathname} className="page-transition">
+          {children}
+        </div>
       </main>
 
-      <nav className="sm:hidden fixed bottom-0 left-0 right-0 border-t border-border bg-surface z-30 flex justify-around items-center h-14">
+      <nav className="sm:hidden fixed bottom-0 left-0 right-0 border-t border-border bg-surface/70 backdrop-blur-md z-30 flex justify-around items-center h-14">
         {NAV.filter((n) => n.mobile).map((n) => (
           <NavLink
             key={n.to}
