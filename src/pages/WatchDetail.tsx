@@ -8,6 +8,7 @@ import { StatusBadge } from '../components/StatusBadge'
 import { useData, useDataContext } from '../hooks/useData'
 import type {
   Currency,
+  Location,
   Money,
   Watch,
   WatchCategory,
@@ -23,11 +24,22 @@ import {
   currencySymbols,
   formatLocation,
   titleCase,
+  todayIso,
 } from '../lib/utils'
 import { toGbp } from '../lib/fx'
 import { loadAuth } from '../lib/auth'
 import { uploadPhoto } from '../lib/storage'
-import { ChevronLeft, Trash2, Save, ImagePlus, X } from 'lucide-react'
+import { getCurrentPosition, reverseGeocode } from '../lib/geocode'
+import { findNearestKnownCity } from '../lib/cityCoords'
+import {
+  ChevronLeft,
+  Trash2,
+  Save,
+  ImagePlus,
+  X,
+  CalendarCheck,
+  RefreshCw,
+} from 'lucide-react'
 import { differenceInDays, parseISO } from 'date-fns'
 
 export function WatchDetail() {
@@ -70,6 +82,8 @@ function WatchDetailInner() {
   const { mutate } = useDataContext()
   const watch = data.watches.find((w) => w.id === id)
   const [editing, setEditing] = useState(false)
+  const [wearingBusy, setWearingBusy] = useState(false)
+  const [wearMessage, setWearMessage] = useState<string | null>(null)
 
   const wears = useMemo(
     () =>
@@ -78,6 +92,71 @@ function WatchDetailInner() {
         .sort((a, b) => b.date.localeCompare(a.date)),
     [data.wearLog, id],
   )
+
+  async function handleWearToday() {
+    if (!watch) return
+    setWearingBusy(true)
+    setWearMessage(null)
+    try {
+      // Try geolocation; fall through on denial / failure so we still log the
+      // wear (just without a location).
+      let location: Location | undefined
+      let source: WearLogEntry['source'] = 'manual'
+      try {
+        const pos = await getCurrentPosition()
+        const lat = pos.coords.latitude
+        const lng = pos.coords.longitude
+        let city: string | undefined
+        let country: string | undefined
+        const near = findNearestKnownCity(lat, lng, 25)
+        if (near) {
+          city = near.city
+          country = near.country
+        } else {
+          try {
+            const loc = await reverseGeocode(lat, lng)
+            city = loc.city
+            country = loc.country
+          } catch {
+            /* lookup failed — still have coords */
+          }
+        }
+        location = { city, country, lat, lng }
+        source = 'geolocation'
+      } catch {
+        /* geolocation denied or unavailable */
+      }
+
+      const date = todayIso()
+      const entry: WearLogEntry = {
+        id: nanoid(10),
+        watchId: watch.id,
+        date,
+        location,
+        source,
+        createdAt: new Date().toISOString(),
+      }
+      let replaced = false
+      await mutate(
+        (d) => {
+          const existing = d.wearLog.findIndex((e) => e.date === date)
+          const wearLog = [...d.wearLog]
+          if (existing >= 0) {
+            replaced = true
+            wearLog[existing] = { ...entry, id: wearLog[existing].id }
+          } else {
+            wearLog.push(entry)
+          }
+          return { ...d, wearLog }
+        },
+        { message: `Log ${watch.brand} ${watch.model} on ${date}` },
+      )
+      const locSuffix = location ? '' : ' (no location)'
+      setWearMessage(replaced ? `Replaced today's wear ✓${locSuffix}` : `Logged ✓${locSuffix}`)
+    } finally {
+      setWearingBusy(false)
+    }
+  }
 
   async function handleDelete() {
     if (!watch) return
@@ -127,8 +206,22 @@ function WatchDetailInner() {
             <div className="text-xs text-text-subtle italic mt-0.5">"{watch.nickname}"</div>
           )}
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap justify-end">
           <StatusBadge status={watch.status} />
+          {watch.status === 'owned' && (
+            <button
+              onClick={handleWearToday}
+              disabled={wearingBusy}
+              className="px-3 py-1.5 text-xs rounded-md bg-accent text-white disabled:opacity-50 inline-flex items-center gap-1"
+            >
+              {wearingBusy ? (
+                <RefreshCw size={12} className="animate-spin" />
+              ) : (
+                <CalendarCheck size={12} />
+              )}
+              Wear today
+            </button>
+          )}
           <button
             onClick={() => setEditing((v) => !v)}
             className="px-3 py-1.5 text-xs rounded-md border border-border"
@@ -137,6 +230,9 @@ function WatchDetailInner() {
           </button>
         </div>
       </div>
+      {wearMessage && (
+        <div className="text-xs text-success -mt-2">{wearMessage}</div>
+      )}
 
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         <Tile label="Times worn" value={wears.length} />
