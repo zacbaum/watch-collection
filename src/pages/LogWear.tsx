@@ -3,12 +3,14 @@ import { useNavigate } from 'react-router-dom'
 import { nanoid } from 'nanoid'
 import { Gate } from '../components/Gate'
 import { Card } from '../components/Card'
+import { Monogram } from '../components/Monogram'
+import { Photo } from '../components/Photo'
 import { useData, useDataContext } from '../hooks/useData'
 import type { Location, WearLogEntry } from '../types'
 import { getCurrentPosition, reverseGeocode } from '../lib/geocode'
-import { todayIso } from '../lib/utils'
+import { classNames, todayIso } from '../lib/utils'
 import { findNearestKnownCity, knownPlaces } from '../lib/cityCoords'
-import { MapPin, AlertCircle, CheckCircle2, RefreshCw, X } from 'lucide-react'
+import { MapPin, AlertCircle, CheckCircle2, RefreshCw, X, Shuffle } from 'lucide-react'
 
 export function LogWear() {
   return (
@@ -23,7 +25,14 @@ function LogWearInner() {
   const { mutate } = useDataContext()
   const navigate = useNavigate()
   const owned = useMemo(
-    () => data.watches.filter((w) => w.status === 'owned'),
+    () =>
+      data.watches
+        .filter((w) => w.status === 'owned')
+        .sort((a, b) => {
+          const ba = a.brand.localeCompare(b.brand, undefined, { sensitivity: 'base' })
+          if (ba !== 0) return ba
+          return a.model.localeCompare(b.model, undefined, { sensitivity: 'base' })
+        }),
     [data.watches],
   )
   const [date, setDate] = useState(todayIso())
@@ -45,6 +54,15 @@ function LogWearInner() {
   const existingWatch = existingEntry
     ? data.watches.find((w) => w.id === existingEntry.watchId)
     : null
+
+  function pickRandom() {
+    // Avoid picking whatever's already selected so a repeated click always
+    // gives you a different option.
+    const candidates = watchId ? owned.filter((w) => w.id !== watchId) : owned
+    if (candidates.length === 0) return
+    const i = Math.floor(Math.random() * candidates.length)
+    setWatchId(candidates[i].id)
+  }
 
   async function handleDelete() {
     if (!existingEntry) return
@@ -231,22 +249,47 @@ function LogWearInner() {
               className="mt-1 block w-full text-sm px-2 py-1.5 border border-border rounded-md bg-bg"
             />
           </label>
-          <label className="block text-xs text-text-muted">
-            Watch
-            <select
-              value={watchId}
-              onChange={(e) => setWatchId(e.target.value)}
-              className="mt-1 block w-full text-sm px-2 py-1.5 border border-border rounded-md bg-bg"
-            >
-              <option value="">— Pick a watch —</option>
+          <div className="block text-xs text-text-muted">
+            <div className="flex items-center justify-between mb-1">
+              <span>Watch</span>
+              <button
+                type="button"
+                onClick={pickRandom}
+                className="px-2 py-0.5 text-[11px] rounded-md border border-border hover:bg-surface-2 inline-flex items-center gap-1"
+              >
+                <Shuffle size={11} /> Pick for me
+              </button>
+            </div>
+            <div className="grid grid-cols-2 gap-2">
               {owned.map((w) => (
-                <option key={w.id} value={w.id}>
-                  {w.brand} {w.model}
-                  {w.reference ? ` (${w.reference})` : ''}
-                </option>
+                <button
+                  key={w.id}
+                  type="button"
+                  onClick={() => setWatchId(w.id)}
+                  className={classNames(
+                    'flex items-center gap-2 p-2 rounded-md border text-left transition',
+                    watchId === w.id
+                      ? 'border-accent bg-accent-soft'
+                      : 'border-border hover:border-border-strong',
+                  )}
+                >
+                  {w.photos?.[0] ? (
+                    <Photo
+                      path={w.photos[0]}
+                      alt={`${w.brand} ${w.model}`}
+                      className="w-9 h-9 rounded object-cover shrink-0 border border-border"
+                    />
+                  ) : (
+                    <Monogram brand={w.brand} model={w.model} size={36} rounded="md" />
+                  )}
+                  <div className="min-w-0">
+                    <div className="text-text font-medium text-xs truncate">{w.brand}</div>
+                    <div className="text-text-muted text-[11px] truncate">{w.model}</div>
+                  </div>
+                </button>
               ))}
-            </select>
-          </label>
+            </div>
+          </div>
 
           <div className="block text-xs text-text-muted">
             Location
