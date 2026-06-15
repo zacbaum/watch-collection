@@ -360,6 +360,18 @@ function looseLocNorm(s: string | undefined): string {
     .trim()
 }
 
+/** Collapse the (city, country) pair into a single cluster key. Mirrors the
+ *  travel-map key in Analytics — handles the asymmetric case where the same
+ *  place ended up stored with only the city or only the country populated. */
+function locClusterKey(city: string | undefined, country: string | undefined): string {
+  const cityN = looseLocNorm(city)
+  const ctyN = looseLocNorm(country)
+  if (!cityN) return `${ctyN}|`
+  if (!ctyN) return `${cityN}|`
+  if (cityN === ctyN) return `${cityN}|`
+  return `${cityN}|${ctyN}`
+}
+
 function buildLocClusters(wearLog: WearLogEntry[]): LocCluster[] {
   // Step 1: tally each exact (city, country) tuple
   const tuples = new Map<string, LocVariant>()
@@ -379,7 +391,7 @@ function buildLocClusters(wearLog: WearLogEntry[]): LocCluster[] {
   // Step 2: group tuples by loose-normalised key
   const clusterMap = new Map<string, LocCluster>()
   for (const t of tuples.values()) {
-    const looseKey = `${looseLocNorm(t.city)}|${looseLocNorm(t.country)}`
+    const looseKey = locClusterKey(t.city, t.country)
     const c = clusterMap.get(looseKey)
     if (c) c.variants.push(t)
     else clusterMap.set(looseKey, { key: looseKey, variants: [t] })

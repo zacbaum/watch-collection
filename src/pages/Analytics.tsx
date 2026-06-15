@@ -1472,6 +1472,18 @@ function normalizeLocPart(s: string | undefined): string {
     .trim()
 }
 
+/** Collapse the (city, country) pair into a single grouping key. Handles the
+ *  asymmetric case where the same place got recorded with either the city or
+ *  the country field populated but not both, so they group together. */
+function travelLocKey(loc: { city?: string; country?: string }): string {
+  const cityN = normalizeLocPart(loc.city)
+  const ctyN = normalizeLocPart(loc.country)
+  if (!cityN) return `${ctyN}|`
+  if (!ctyN) return `${cityN}|`
+  if (cityN === ctyN) return `${cityN}|`
+  return `${cityN}|${ctyN}`
+}
+
 function TravelMapCard({ wearLog }: { wearLog: WearLogEntry[] }) {
   const { resolvedPoints, unresolvedCount } = useMemo(() => {
     const groups = new Map<
@@ -1480,7 +1492,7 @@ function TravelMapCard({ wearLog }: { wearLog: WearLogEntry[] }) {
     >()
     for (const e of wearLog) {
       if (!e.location?.city && !e.location?.country) continue
-      const key = `${normalizeLocPart(e.location.city)}|${normalizeLocPart(e.location.country)}`
+      const key = travelLocKey(e.location)
       const existing = groups.get(key)
       if (existing) {
         existing.count += 1
