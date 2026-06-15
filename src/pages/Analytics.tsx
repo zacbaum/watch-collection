@@ -125,12 +125,6 @@ function AnalyticsInner() {
           watchColors={watchColors}
         />
         <RotationDiversityCard wearLog={filteredWearLog} />
-        <DayOfWeekCard
-          watches={data.watches}
-          wearLog={filteredWearLog}
-          watchColors={watchColors}
-          rangeLabel={rangeLabel(range)}
-        />
         {/* CPW line chart — window-scaled X axis, cumulative wears use full history */}
         <CostPerWearOverTimeCard
           watches={data.watches}
@@ -972,111 +966,6 @@ function WearsVsSpendCard({
           </ResponsiveContainer>
         </div>
       )}
-    </Card>
-  )
-}
-
-const DOW_LABELS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
-
-function DayOfWeekCard({
-  watches,
-  wearLog,
-  watchColors,
-  rangeLabel,
-}: {
-  watches: Watch[]
-  wearLog: WearLogEntry[]
-  watchColors: Map<string, string>
-  rangeLabel: string
-}) {
-  const { rows, ids } = useMemo(() => {
-    // Mon=0 ... Sun=6 (shift from JS getDay where 0=Sun)
-    const counts: Array<Map<string, number>> = Array.from({ length: 7 }, () => new Map())
-    for (const e of wearLog) {
-      const jsDay = parseISO(e.date).getDay()
-      const dow = (jsDay + 6) % 7
-      const inner = counts[dow]
-      inner.set(e.watchId, (inner.get(e.watchId) ?? 0) + 1)
-    }
-    const usedIds = new Set<string>()
-    for (const m of counts) for (const id of m.keys()) usedIds.add(id)
-    const ids = watches.filter((w) => usedIds.has(w.id)).map((w) => w.id)
-    const rows = DOW_LABELS.map((day, i) => {
-      const row: Record<string, string | number> = { day }
-      const m = counts[i]
-      for (const id of ids) row[id] = m.get(id) ?? 0
-      return row
-    })
-    return { rows, ids }
-  }, [watches, wearLog])
-
-  const total = useMemo(
-    () => rows.reduce((s, r) => s + ids.reduce((t, id) => t + (r[id] as number), 0), 0),
-    [rows, ids],
-  )
-
-  if (total === 0) {
-    return (
-      <Card title={`Wears by day of week (${rangeLabel})`}>
-        <div className="text-xs text-text-muted">No wear data in this window.</div>
-      </Card>
-    )
-  }
-
-  const watchById = new Map(watches.map((w) => [w.id, w]))
-
-  return (
-    <Card title={`Wears by day of week (${rangeLabel})`}>
-      <div className="flex-1 min-h-56">
-        <ResponsiveContainer width="100%" height="100%">
-          <BarChart data={rows} barCategoryGap={4}>
-            <CartesianGrid stroke="#f4f4f3" vertical={false} />
-            <XAxis dataKey="day" fontSize={10} />
-            <YAxis fontSize={10} allowDecimals={false} />
-            <Tooltip
-              cursor={{ fill: 'rgba(0,0,0,0.03)' }}
-              content={({ active, payload, label }) => {
-                if (!active || !payload?.length) return null
-                const dayTotal = payload.reduce((s, p) => s + ((p.value as number) ?? 0), 0)
-                const items = payload
-                  .filter((p) => ((p.value as number) ?? 0) > 0)
-                  .sort((a, b) => (b.value as number) - (a.value as number))
-                return (
-                  <div className="bg-bg border border-border rounded px-2 py-1 text-[11px] shadow-sm">
-                    <div className="font-medium mb-0.5">
-                      {String(label)} · {dayTotal} {dayTotal === 1 ? 'wear' : 'wears'}
-                    </div>
-                    {items.map((p) => {
-                      const w = watchById.get(p.dataKey as string)
-                      if (!w) return null
-                      return (
-                        <div key={w.id} className="flex items-center gap-1.5">
-                          <span
-                            className="inline-block w-2 h-2 rounded-sm"
-                            style={{ backgroundColor: watchColors.get(w.id) }}
-                          />
-                          <span className="text-text">{w.brand}</span>
-                          <span className="text-text-muted">{w.model}</span>
-                          <span className="ml-auto text-text-subtle">{p.value as number}</span>
-                        </div>
-                      )
-                    })}
-                  </div>
-                )
-              }}
-            />
-            {ids.map((id) => (
-              <Bar
-                key={id}
-                dataKey={id}
-                stackId="dow"
-                fill={watchColors.get(id) ?? '#cccccc'}
-                isAnimationActive={false}
-              />
-            ))}
-          </BarChart>
-        </ResponsiveContainer>
-      </div>
     </Card>
   )
 }
