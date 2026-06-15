@@ -10,6 +10,7 @@ import {
   CalendarDays,
   Cloud,
   CloudOff,
+  Flame,
 } from 'lucide-react'
 // CalendarDays still used by the mobile "Log" footer button below
 import { useDataContext } from '../hooks/useData'
@@ -59,6 +60,7 @@ export function Layout({ children }: LayoutProps) {
             ))}
           </nav>
           <div className="flex-1" />
+          <StreakIndicator state={state} />
           <SyncIndicator state={state} syncing={syncing} />
           <NavLink
             to="/log"
@@ -103,6 +105,50 @@ export function Layout({ children }: LayoutProps) {
         </NavLink>
       </nav>
     </div>
+  )
+}
+
+function isoOf(d: Date): string {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+}
+
+function currentStreak(wearLog: Array<{ date: string }>): {
+  days: number
+  includesToday: boolean
+} {
+  if (wearLog.length === 0) return { days: 0, includesToday: false }
+  const dates = new Set(wearLog.map((e) => e.date))
+  const now = new Date()
+  const includesToday = dates.has(isoOf(now))
+  const cursor = new Date(now.getFullYear(), now.getMonth(), now.getDate())
+  if (!includesToday) cursor.setDate(cursor.getDate() - 1)
+  let streak = 0
+  while (dates.has(isoOf(cursor))) {
+    streak++
+    cursor.setDate(cursor.getDate() - 1)
+  }
+  return { days: streak, includesToday }
+}
+
+function StreakIndicator({ state }: { state: ReturnType<typeof useDataContext>['state'] }) {
+  if (state.kind !== 'ready') return null
+  const streak = currentStreak(state.data.wearLog)
+  if (streak.days === 0) return null
+  return (
+    <span
+      className={classNames(
+        'text-xs flex items-center gap-1 tabular-nums',
+        streak.includesToday ? 'text-warning' : 'text-text-muted',
+      )}
+      title={
+        streak.includesToday
+          ? `${streak.days}-day logging streak`
+          : `${streak.days}-day streak — today not logged yet`
+      }
+    >
+      <Flame size={14} />
+      {streak.days}
+    </span>
   )
 }
 
