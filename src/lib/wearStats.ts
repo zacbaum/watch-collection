@@ -286,20 +286,24 @@ export function yearsCovered(wearLog: WearLogEntry[]): number[] {
 // ─── Sellability ───────────────────────────────────────────────────────────
 //
 // Composite 0–100 score per owned watch. Higher = "more sellable" — the
-// signals are pure wear-pattern derived (we don't peek at price). Four
-// components, weighted:
+// signals are pure wear-pattern derived (we don't peek at price). The metric
+// deliberately weights RECENT behaviour over historical: a watch worn a
+// hundred times two years ago but ignored since is still sellable, even if
+// past-you adored it.
 //
-//   • Dormancy   (35%)  — days since last worn, scaled to a 2-year cap
-//   • Drop-off   (25%)  — recent (last 365d) wear rate vs lifetime rate.
-//                         If you used to wear it, then stopped, scores high
-//   • One-off    (20%)  — never worn / worn once / worn in a tight burst
-//                         then abandoned
-//   • Under-use  (20%)  — low absolute wear count (vs a 100-wear "committed"
-//                         baseline)
+// Three components, weighted:
+//
+//   • Dormancy   (40%)  — days since last worn, sqrt(d/365) — already 0.5 at
+//                         90 days idle; saturates at 365d
+//   • Drop-off   (35%)  — recent (last 365d) wear rate vs lifetime rate;
+//                         fires once owned > 90 days
+//   • One-off    (25%)  — never worn / worn once / worn in a tight burst then
+//                         abandoned; gated on 60+ days owned so brand-new
+//                         purchases aren't unfairly flagged
 //
 // Each component is clamped to [0, 1]; the score is the weighted sum × 100.
 // The rationale field surfaces the single biggest contributor in plain English
-// so the table can give the user a "why" without exposing the math.
+// so the table can give a "why" without exposing the math.
 
 export interface SellabilityResult {
   watchId: string
@@ -337,14 +341,18 @@ export function sellabilityForWatch(
   const wearsLast365 = wears.filter((d) => parseISO(d).getTime() >= cutoffMs).length
 
   // ─ Component 1: dormancy ─────────────────────────────────────
+  // sqrt curve ramps faster than linear at the start:
+  //   30d  → 0.29     90d  → 0.50     180d → 0.70     365d → 1.00
+  // Never-worn = 1.0.
   const dormancy =
-    daysSinceWorn == null ? 1 : Math.min(daysSinceWorn / 730, 1)
+    daysSinceWorn == null ? 1 : Math.min(Math.sqrt(daysSinceWorn / 365), 1)
 
   // ─ Component 2: drop-off (recent rate vs lifetime rate) ──────
-  // Only meaningful once owned a year — otherwise lifetime rate is too noisy
+  // Gated on 90+ days owned so noisy brand-new watches don't dominate.
   let dropoff = 0
-  if (daysOwned != null && daysOwned > 365 && wearsTotal > 0) {
-    const recentRate = wearsLast365 / 365
+  if (daysOwned != null && daysOwned > 90 && wearsTotal > 0) {
+    const recentWindow = Math.min(daysOwned, 365)
+    const recentRate = wearsLast365 / recentWindow
     const historicalRate = wearsTotal / daysOwned
     if (historicalRate > 0) {
       dropoff = Math.max(0, Math.min(1, 1 - recentRate / historicalRate))
@@ -352,47 +360,33 @@ export function sellabilityForWatch(
   }
 
   // ─ Component 3: one-off-ness ─────────────────────────────────
+  // Gated on 60+ days owned so a freshly-purchased watch worn once last
+  // week isn't flagged as a fling.
   let oneOff = 0
   if (wearsTotal === 0) {
     oneOff = 1
-  } else if (wearsTotal === 1) {
-    oneOff = 0.9
-  } else if (
-    wearsTotal <= 3 &&
-    daysSinceWorn != null &&
-    daysSinceWorn > 180
-  ) {
-    oneOff = 0.7
-  } else if (
-    daysOwned != null &&
-    firstWornDate &&
-    lastWornDate &&
-    daysSinceWorn != null
-  ) {
-    const span = Math.max(
-      1,
-      differenceInDays(parseISO(lastWornDate), parseISO(firstWornDate)),
-    )
-    const spanRatio = span / daysOwned
-    if (spanRatio < 0.3 && daysSinceWorn > 90) oneOff = 0.5
+  } else if (daysOwned != null && daysOwned >= 60) {
+    if (wearsTotal === 1) {
+      oneOff = 1
+    } else if (wearsTotal <= 5 && daysSinceWorn != null && daysSinceWorn > 90) {
+      oneOff = 0.7
+    } else if (firstWornDate && lastWornDate && daysSinceWorn != null) {
+      const span = Math.max(
+        1,
+        differenceInDays(parseISO(lastWornDate), parseISO(firstWornDate)),
+      )
+      const spanRatio = span / daysOwned
+      if (spanRatio < 0.3 && daysSinceWorn > 60) oneOff = 0.5
+    }
   }
 
-  // ─ Component 4: under-use (low absolute count) ───────────────
-  // 100+ wears anchors the "committed" end. The point isn't that 100 is
-  // magic — it's that the curve flattens out before then so frequently-worn
-  // watches don't all score "0".
-  const underUse = wearsTotal === 0 ? 1 : Math.max(0, 1 - wearsTotal / 100)
-
-  const score = Math.round(
-    100 * (0.35 * dormancy + 0.25 * dropoff + 0.2 * oneOff + 0.2 * underUse),
-  )
+  const score = Math.round(100 * (0.4 * dormancy + 0.35 * dropoff + 0.25 * oneOff))
 
   // ─ Rationale: pick the largest contributor and translate to plain words ─
   const contributions: Array<{ key: string; weighted: number }> = [
-    { key: 'dormancy', weighted: 0.35 * dormancy },
-    { key: 'dropoff', weighted: 0.25 * dropoff },
-    { key: 'oneOff', weighted: 0.2 * oneOff },
-    { key: 'underUse', weighted: 0.2 * underUse },
+    { key: 'dormancy', weighted: 0.4 * dormancy },
+    { key: 'dropoff', weighted: 0.35 * dropoff },
+    { key: 'oneOff', weighted: 0.25 * oneOff },
   ]
   contributions.sort((a, b) => b.weighted - a.weighted)
   const top = contributions[0]
@@ -409,10 +403,8 @@ export function sellabilityForWatch(
     } else if (top.key === 'oneOff') {
       if (wearsTotal === 0) rationale = 'never worn'
       else if (wearsTotal === 1) rationale = 'worn just once'
-      else if (wearsTotal <= 3) rationale = `only ${wearsTotal} wears, none recent`
+      else if (wearsTotal <= 5) rationale = `only ${wearsTotal} wears, none recent`
       else rationale = 'wears clustered early, then abandoned'
-    } else {
-      rationale = `${wearsTotal} total wears`
     }
   }
 
