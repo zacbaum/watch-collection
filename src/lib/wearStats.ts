@@ -287,37 +287,37 @@ export function yearsCovered(wearLog: WearLogEntry[]): number[] {
 //
 // Composite 0–100 score per owned watch. Higher = "more sellable" — the
 // signals are pure wear-pattern derived (we don't peek at price). The metric
-// deliberately weights RECENT behaviour over historical: a watch worn a
-// hundred times two years ago but ignored since is still sellable, even if
-// past-you adored it.
+// weights RECENT behaviour over historical and adds a peer-comparison signal
+// (fair share) so a watch that's structurally under-represented in rotation
+// is flagged even when its absolute usage looks fine.
 //
 // Three components, weighted:
 //
-//   • Dormancy   (45%)  — days since last worn, sqrt(d/180). Saturates at
-//                         6 months idle (90 days ≈ 0.71). Never-worn = 1.0
-//   • Drop-off   (40%)  — recent (last 365d) wear rate vs lifetime rate;
+//   • Dormancy    (40%) — days since last worn, sqrt(d/90). Saturates at
+//                         3 months idle. Never-worn = 1.0
+//   • Drop-off    (30%) — recent (last 365d) wear rate vs lifetime rate;
 //                         fires once owned > 90 days. Never-worn after that
-//                         counts as the maximum drop-off signal (1.0)
-//   • One-off    (15%)  — special-case bonus when a watch is clearly a
-//                         single-wear or short-burst purchase that never
-//                         made it into rotation; gated on 60+ days owned
-//                         so brand-new purchases aren't unfairly flagged
+//                         threshold = 1.0
+//   • Fair share  (30%) — share of wears vs a fair 1/N split across the
+//                         watches owned in each of 90d, 180d, 365d windows,
+//                         averaged. Gated on 60+ days owned. Catches the
+//                         "looked busy on 1y but actually inactive" pattern
+//                         and the "consistently under-rotated" pattern.
 //
 // Each component is clamped to [0, 1]; the score is the weighted sum × 100.
-// The rationale field surfaces the single biggest contributor in plain English
-// so the table can give a "why" without exposing the math.
+// The rationale field surfaces the single biggest contributor in plain English.
 
 export interface SellabilityComponents {
   /** 0-1 dormancy contribution */
   dormancy: number
   /** 0-1 wear-rate drop-off contribution */
   dropoff: number
-  /** 0-1 one-off/fling contribution */
-  oneOff: number
+  /** 0-1 fair-share-under contribution (avg over 90/180/365d windows) */
+  fairShare: number
   /** Component weights as used to compute the final score (sum = 1) */
-  weights: { dormancy: number; dropoff: number; oneOff: number }
+  weights: { dormancy: number; dropoff: number; fairShare: number }
   /** Per-component short explanations matching the row's actual data */
-  reasons: { dormancy: string; dropoff: string; oneOff: string }
+  reasons: { dormancy: string; dropoff: string; fairShare: string }
 }
 
 export interface SellabilityResult {
@@ -337,8 +337,44 @@ export interface SellabilityResult {
   components: SellabilityComponents
 }
 
+/** Fair-share under-percentage in a single window ending at asOfIso. Returns
+ *  0..1; higher = the target watch got less than its 1/N share of wear-days
+ *  among the watches owned at that point in time. */
+function fairShareUnderWindow(
+  target: Watch,
+  watches: Watch[],
+  wearLog: WearLogEntry[],
+  asOfIso: string,
+  windowDays: number,
+): number {
+  const owned = watches.filter((w) => {
+    const acq = w.acquisitionDate
+    if (!acq || acq > asOfIso) return false
+    if (w.status === 'sold' && w.saleDate && w.saleDate <= asOfIso) return false
+    if (w.status === 'gifted' && w.giftedDate && w.giftedDate <= asOfIso)
+      return false
+    return true
+  })
+  if (owned.length < 2) return 0
+  const cutoffMs = parseISO(asOfIso).getTime() - windowDays * 86_400_000
+  const ownedIds = new Set(owned.map((w) => w.id))
+  const inWindow = wearLog.filter(
+    (e) =>
+      ownedIds.has(e.watchId) &&
+      e.date <= asOfIso &&
+      parseISO(e.date).getTime() >= cutoffMs,
+  )
+  const totalWears = inWindow.length
+  if (totalWears === 0) return 0
+  const targetWears = inWindow.filter((e) => e.watchId === target.id).length
+  const expected = totalWears / owned.length
+  if (expected === 0) return 0
+  return Math.max(0, Math.min(1, 1 - targetWears / expected))
+}
+
 export function sellabilityForWatch(
   watch: Watch,
+  watches: Watch[],
   wearLog: WearLogEntry[],
   asOfIso?: string,
 ): SellabilityResult {
@@ -367,18 +403,14 @@ export function sellabilityForWatch(
   const wearsLast365 = wears.filter((d) => parseISO(d).getTime() >= cutoffMs).length
 
   // ─ Component 1: dormancy ─────────────────────────────────────
-  // sqrt(d/180) — saturates at 6 months idle. Harsher than the previous
-  // 12-month saturation, matching the user's daily-logging cadence:
-  //   30d  → 0.41     60d  → 0.58     90d  → 0.71     180d → 1.00
+  // sqrt(d/90) — saturates at 3 months idle:
+  //   30d → 0.58    60d → 0.82    90d → 1.00
   // Never-worn = 1.0.
   const dormancy =
-    daysSinceWorn == null ? 1 : Math.min(Math.sqrt(daysSinceWorn / 180), 1)
+    daysSinceWorn == null ? 1 : Math.min(Math.sqrt(daysSinceWorn / 90), 1)
 
   // ─ Component 2: drop-off (recent rate vs lifetime rate) ──────
-  // Gated on 90+ days owned so noisy brand-new watches don't dominate.
-  // Never-worn after that threshold counts as maximum drop-off — there's no
-  // historical rate to drop off from, but the absence of any wear over a
-  // quarter is itself the signal.
+  // Gated on 90+ days owned. Never-worn = max signal (1.0).
   let dropoff = 0
   if (daysOwned != null && daysOwned > 90) {
     if (wearsTotal === 0) {
@@ -393,30 +425,24 @@ export function sellabilityForWatch(
     }
   }
 
-  // ─ Component 3: one-off-ness ─────────────────────────────────
-  // Gated on 60+ days owned so a freshly-purchased watch worn once last
-  // week isn't flagged as a fling.
-  let oneOff = 0
-  if (wearsTotal === 0) {
-    oneOff = 1
-  } else if (daysOwned != null && daysOwned >= 60) {
-    if (wearsTotal === 1) {
-      oneOff = 1
-    } else if (wearsTotal <= 5 && daysSinceWorn != null && daysSinceWorn > 60) {
-      oneOff = 0.8
-    } else if (firstWornDate && lastWornDate && daysSinceWorn != null) {
-      const span = Math.max(
-        1,
-        differenceInDays(parseISO(lastWornDate), parseISO(firstWornDate)),
-      )
-      const spanRatio = span / daysOwned
-      if (spanRatio < 0.4 && daysSinceWorn > 60) oneOff = 0.6
-    }
+  // ─ Component 3: fair-share peer comparison ───────────────────
+  // Averaged across 90d / 180d / 365d windows so a single busy month can't
+  // mask consistent under-rotation. Gated on 60+ days owned so a brand-new
+  // acquisition isn't penalised for not having found its rotation slot yet.
+  let fairShare = 0
+  if (daysOwned != null && daysOwned >= 60) {
+    const fs90 = fairShareUnderWindow(watch, watches, wearLog, todayIso, 90)
+    const fs180 = fairShareUnderWindow(watch, watches, wearLog, todayIso, 180)
+    const fs365 = fairShareUnderWindow(watch, watches, wearLog, todayIso, 365)
+    fairShare = (fs90 + fs180 + fs365) / 3
   }
 
-  const weights = { dormancy: 0.45, dropoff: 0.4, oneOff: 0.15 }
+  const weights = { dormancy: 0.4, dropoff: 0.3, fairShare: 0.3 }
   const score = Math.round(
-    100 * (weights.dormancy * dormancy + weights.dropoff * dropoff + weights.oneOff * oneOff),
+    100 *
+      (weights.dormancy * dormancy +
+        weights.dropoff * dropoff +
+        weights.fairShare * fairShare),
   )
 
   // ─ Per-component reason text (used by the hover tooltip) ───────
@@ -434,14 +460,12 @@ export function sellabilityForWatch(
       const pct = Math.round(dropoff * 100)
       return `recent wear rate is ${pct}% below lifetime`
     })(),
-    oneOff: (() => {
-      if (wearsTotal === 0) return 'never worn'
+    fairShare: (() => {
       if (daysOwned != null && daysOwned < 60)
-        return 'owned too briefly to judge one-off'
-      if (oneOff === 0) return 'wears spread across ownership'
-      if (wearsTotal === 1) return 'worn just once'
-      if (wearsTotal <= 5) return `only ${wearsTotal} wears, none recent`
-      return 'wears clustered early, then abandoned'
+        return 'owned too briefly to judge rotation share'
+      if (fairShare === 0) return 'at or above fair 1/N share of rotation'
+      const pct = Math.round(fairShare * 100)
+      return `${pct}% under fair 1/N share across 90/180/365d`
     })(),
   }
 
@@ -449,7 +473,7 @@ export function sellabilityForWatch(
   const contributions: Array<{ key: keyof typeof weights; weighted: number }> = [
     { key: 'dormancy', weighted: weights.dormancy * dormancy },
     { key: 'dropoff', weighted: weights.dropoff * dropoff },
-    { key: 'oneOff', weighted: weights.oneOff * oneOff },
+    { key: 'fairShare', weighted: weights.fairShare * fairShare },
   ]
   contributions.sort((a, b) => b.weighted - a.weighted)
   const top = contributions[0]
@@ -465,7 +489,7 @@ export function sellabilityForWatch(
     asOf: todayIso,
     atSaleDate: asOfIso != null,
     rationale,
-    components: { dormancy, dropoff, oneOff, weights, reasons },
+    components: { dormancy, dropoff, fairShare, weights, reasons },
   }
 }
 
@@ -484,7 +508,7 @@ export function sellabilityRanking(
   return candidates
     .map((w) => {
       const asOf = w.status === 'sold' && w.saleDate ? w.saleDate : undefined
-      return sellabilityForWatch(w, wearLog, asOf)
+      return sellabilityForWatch(w, watches, wearLog, asOf)
     })
     .sort((a, b) => b.score - a.score)
 }

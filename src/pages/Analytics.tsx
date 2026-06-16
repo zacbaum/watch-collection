@@ -1254,11 +1254,12 @@ function SellabilityCard({
       action={showSoldToggle}
     >
       <div className="text-[11px] text-text-muted mb-3">
-        Higher = more sellable. Composite of dormancy (45%, saturates at 6
-        months idle), wear-rate drop-off vs lifetime (40%, never-worn after
-        90 days = max signal), and one-off-ness (15%, brief-fling bonus).
-        Pure wear-pattern derived — no price input. Hover any row for the
-        per-component breakdown.
+        Higher = more sellable. Composite of dormancy (40%, saturates at 3
+        months idle), wear-rate drop-off vs lifetime (30%, never-worn after
+        90 days = max signal), and fair-share under-rotation (30%, averaged
+        across 90/180/365-day windows so a single busy month can't hide
+        consistent under-use). Pure wear-pattern derived — no price input.
+        Hover any row for the per-component breakdown.
       </div>
       <ul className="divide-y divide-border -mx-3 sm:-mx-4">
         {rows.map((r) => {
@@ -1267,7 +1268,7 @@ function SellabilityCard({
           const color = watchColors.get(w.id) ?? '#cccccc'
           const c = r.components
           const parts: Array<{
-            key: 'dormancy' | 'dropoff' | 'oneOff'
+            key: 'dormancy' | 'dropoff' | 'fairShare'
             label: string
             value: number
             max: number
@@ -1288,11 +1289,11 @@ function SellabilityCard({
               reason: c.reasons.dropoff,
             },
             {
-              key: 'oneOff',
-              label: 'One-off',
-              value: Math.round(c.weights.oneOff * c.oneOff * 100),
-              max: Math.round(c.weights.oneOff * 100),
-              reason: c.reasons.oneOff,
+              key: 'fairShare',
+              label: 'Fair share',
+              value: Math.round(c.weights.fairShare * c.fairShare * 100),
+              max: Math.round(c.weights.fairShare * 100),
+              reason: c.reasons.fairShare,
             },
           ]
           return (
