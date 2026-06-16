@@ -38,7 +38,7 @@ import { CalendarHeatmap } from '../components/CalendarHeatmap'
 import { TimeRangeFilter } from '../components/TimeRangeFilter'
 import { useData } from '../hooks/useData'
 import type { Watch, WearLogEntry } from '../types'
-import { formatGbp } from '../lib/utils'
+import { classNames, formatGbp } from '../lib/utils'
 import { lookupCoords } from '../lib/cityCoords'
 import { buildWatchColorMap } from '../lib/palette'
 import {
@@ -1216,27 +1216,74 @@ function SellabilityCard({
   watchColors: Map<string, string>
 }) {
   const [showSold, setShowSold] = useState(false)
-  const rows = useMemo(
+  const [sortMode, setSortMode] = useState<'score' | 'value'>('score')
+  const ranking = useMemo(
     () => sellabilityRanking(watches, wearLog, { includeSold: showSold }),
     [watches, wearLog, showSold],
   )
   const watchById = useMemo(() => new Map(watches.map((w) => [w.id, w])), [watches])
 
-  const showSoldToggle = (
-    <label className="text-[11px] text-text-muted inline-flex items-center gap-1.5 cursor-pointer select-none">
-      <input
-        type="checkbox"
-        checked={showSold}
-        onChange={(e) => setShowSold(e.target.checked)}
-        className="accent-accent"
-      />
-      Include sold (snapshot at sale date)
-    </label>
+  // Value-at-risk = score × current value. For sold watches there's no
+  // capital at risk today, so they sort below all owned in value mode.
+  const rows = useMemo(() => {
+    if (sortMode === 'score') return ranking
+    const withVar = ranking.map((r) => {
+      const w = watchById.get(r.watchId)
+      const value = w?.status === 'owned' ? (w.currentValueGbp ?? 0) : 0
+      return { r, valueAtRisk: (r.score / 100) * value }
+    })
+    return withVar
+      .sort((a, b) => b.valueAtRisk - a.valueAtRisk)
+      .map((x) => x.r)
+  }, [ranking, sortMode, watchById])
+
+  // Capital tied up in watches scoring >= 60 (owned only — sold isn't capital).
+  const capitalAtRisk = useMemo(() => {
+    let total = 0
+    for (const r of ranking) {
+      if (r.score < 60) continue
+      const w = watchById.get(r.watchId)
+      if (w?.status !== 'owned') continue
+      total += w.currentValueGbp ?? 0
+    }
+    return total
+  }, [ranking, watchById])
+
+  const action = (
+    <div className="flex items-center gap-3">
+      <div className="flex border border-border rounded-md overflow-hidden text-[10px]">
+        {(['score', 'value'] as const).map((m) => (
+          <button
+            key={m}
+            type="button"
+            onClick={() => setSortMode(m)}
+            className={classNames(
+              'px-2 py-0.5 transition',
+              sortMode === m
+                ? 'bg-surface-2 text-text font-medium'
+                : 'text-text-muted hover:bg-surface-2/60',
+            )}
+            title={m === 'value' ? 'Sort by score × current value' : 'Sort by score'}
+          >
+            {m === 'value' ? 'Value' : 'Score'}
+          </button>
+        ))}
+      </div>
+      <label className="text-[11px] text-text-muted inline-flex items-center gap-1.5 cursor-pointer select-none">
+        <input
+          type="checkbox"
+          checked={showSold}
+          onChange={(e) => setShowSold(e.target.checked)}
+          className="accent-accent"
+        />
+        Include sold
+      </label>
+    </div>
   )
 
   if (rows.length === 0) {
     return (
-      <Card title="Sellability" action={showSoldToggle}>
+      <Card title="Sellability" action={action}>
         <div className="text-xs text-text-muted">No watches to rank.</div>
       </Card>
     )
@@ -1251,7 +1298,7 @@ function SellabilityCard({
   return (
     <Card
       title="Sellability · owned watches ranked by wear-pattern signals"
-      action={showSoldToggle}
+      action={action}
     >
       <div className="text-[11px] text-text-muted mb-3">
         Higher = more sellable. Composite of dormancy (40%, saturates at 3
@@ -1259,8 +1306,16 @@ function SellabilityCard({
         90 days = max signal), and fair-share under-rotation (30%, averaged
         across 90/180/365-day windows so a single busy month can't hide
         consistent under-use). Pure wear-pattern derived — no price input.
-        Hover any row for the per-component breakdown.
+        Hover any row for the per-component breakdown. Gifted watches faded.
       </div>
+      {capitalAtRisk > 0 && (
+        <div className="mb-3 px-3 py-2 rounded-md bg-surface-2/60 border border-border text-xs flex items-baseline justify-between">
+          <span className="text-text-muted">Capital in watches scoring 60+</span>
+          <span className="text-text font-semibold tabular-nums">
+            {formatGbp(capitalAtRisk)}
+          </span>
+        </div>
+      )}
       <ul className="divide-y divide-border -mx-3 sm:-mx-4">
         {rows.map((r) => {
           const w = watchById.get(r.watchId)
@@ -1296,10 +1351,14 @@ function SellabilityCard({
               reason: c.reasons.fairShare,
             },
           ]
+          const valueGbp = w.status === 'owned' ? (w.currentValueGbp ?? 0) : 0
           return (
             <li
               key={r.watchId}
-              className="group relative px-3 sm:px-4 py-2 grid grid-cols-[1fr_auto] gap-3 items-center hover:bg-surface-2/40 transition-colors"
+              className={classNames(
+                'group relative px-3 sm:px-4 py-2 grid grid-cols-[1fr_auto] gap-3 items-center hover:bg-surface-2/40 transition-colors',
+                w.wasGift && 'opacity-65',
+              )}
             >
               <div className="min-w-0">
                 <div className="flex items-center gap-2 min-w-0">
@@ -1311,6 +1370,11 @@ function SellabilityCard({
                     {w.brand}{' '}
                     <span className="text-text-muted">{w.model}</span>
                   </span>
+                  {w.wasGift && (
+                    <span className="text-[10px] uppercase tracking-wide text-text-subtle border border-border rounded px-1 py-px shrink-0">
+                      gift
+                    </span>
+                  )}
                   {r.atSaleDate && (
                     <span className="text-[10px] uppercase tracking-wide text-text-subtle border border-border rounded px-1 py-px shrink-0">
                       at sale
@@ -1324,21 +1388,35 @@ function SellabilityCard({
                   )}
                 </div>
               </div>
-              <div className="flex items-center gap-2 shrink-0">
-                <div className="w-24 h-1.5 rounded-full bg-surface-2 overflow-hidden">
+              <div className="flex items-center gap-3 shrink-0">
+                {valueGbp > 0 && (
+                  <div className="text-right">
+                    <div className="text-[11px] text-text-muted tabular-nums">
+                      {formatGbp(valueGbp)}
+                    </div>
+                    {sortMode === 'value' && (
+                      <div className="text-[10px] text-text-subtle tabular-nums">
+                        {formatGbp(Math.round((r.score / 100) * valueGbp))} at risk
+                      </div>
+                    )}
+                  </div>
+                )}
+                <div className="flex items-center gap-2">
+                  <div className="w-24 h-1.5 rounded-full bg-surface-2 overflow-hidden">
+                    <div
+                      className="h-full rounded-full"
+                      style={{
+                        width: `${r.score}%`,
+                        backgroundColor: scoreColor(r.score),
+                      }}
+                    />
+                  </div>
                   <div
-                    className="h-full rounded-full"
-                    style={{
-                      width: `${r.score}%`,
-                      backgroundColor: scoreColor(r.score),
-                    }}
-                  />
-                </div>
-                <div
-                  className="text-sm font-semibold tabular-nums w-8 text-right"
-                  style={{ color: scoreColor(r.score) }}
-                >
-                  {r.score}
+                    className="text-sm font-semibold tabular-nums w-8 text-right"
+                    style={{ color: scoreColor(r.score) }}
+                  >
+                    {r.score}
+                  </div>
                 </div>
               </div>
               {/* Hover-only component breakdown. Anchored to row's right
