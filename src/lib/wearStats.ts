@@ -505,6 +505,29 @@ export function sellabilityForWatch(
   }
 }
 
+/** Sellability score for the watch sampled weekly going backwards from
+ *  endAsOf (defaults to today) for `weeks` snapshots. Each snapshot uses
+ *  that week's date as its own asOf, so it answers "what would the score
+ *  have been if I'd run the calc that day?" — t-0 for that point. */
+export function sellabilityHistory(
+  watch: Watch,
+  watches: Watch[],
+  wearLog: WearLogEntry[],
+  weeks: number,
+  endAsOf?: string,
+): Array<{ asOf: string; score: number }> {
+  const endIso = endAsOf ?? format(new Date(), 'yyyy-MM-dd')
+  const endMs = parseISO(endIso).getTime()
+  const out: Array<{ asOf: string; score: number }> = []
+  for (let i = weeks - 1; i >= 0; i--) {
+    const ms = endMs - i * 7 * 86_400_000
+    const iso = format(new Date(ms), 'yyyy-MM-dd')
+    const r = sellabilityForWatch(watch, watches, wearLog, iso)
+    out.push({ asOf: iso, score: r.score })
+  }
+  return out
+}
+
 /** Owned watches ranked by sellability descending. Pass includeSold to also
  *  include sold watches — their scores are computed as of the sale date so
  *  the snapshot answers "was this a good time to sell?" rather than "would

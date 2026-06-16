@@ -50,6 +50,7 @@ import {
   rangeSince,
   rotationDiversityByMonth,
   rotationScore,
+  sellabilityHistory,
   sellabilityRanking,
   watchShareByMonth,
   weekKeyOf,
@@ -1206,6 +1207,75 @@ interface MapPoint {
 
 // ─── Behaviour-pattern cards ────────────────────────────────────────────────
 
+function sparkColor(score: number): string {
+  if (score >= 60) return 'var(--color-danger)'
+  if (score >= 35) return 'var(--color-warning)'
+  return 'var(--color-success)'
+}
+
+function Sparkline({ history }: { history: Array<{ asOf: string; score: number }> }) {
+  if (history.length === 0) return null
+  const W = 56
+  const H = 14
+  const bw = W / history.length
+  return (
+    <svg width={W} height={H} className="block shrink-0" aria-hidden>
+      {history.map((p, i) => {
+        const h = Math.max(1, (p.score / 100) * H)
+        return (
+          <rect
+            key={p.asOf}
+            x={i * bw}
+            y={H - h}
+            width={Math.max(1, bw - 0.5)}
+            height={h}
+            fill={sparkColor(p.score)}
+          />
+        )
+      })}
+    </svg>
+  )
+}
+
+/** Arrow + delta vs the score from 13 weeks (~90 days) ago. Up = score
+ *  rising = more sellable (bad direction). */
+function TrendArrow({
+  history,
+}: {
+  history: Array<{ asOf: string; score: number }>
+}) {
+  if (history.length < 2) return <span className="w-9" />
+  const current = history[history.length - 1].score
+  // 13 weeks back from latest snapshot. Falls back to the oldest point we have.
+  const priorIdx = Math.max(0, history.length - 1 - 13)
+  const prior = history[priorIdx].score
+  const delta = current - prior
+  const stable = Math.abs(delta) <= 5
+  const symbol = stable ? '→' : delta > 0 ? '↑' : '↓'
+  const color = stable
+    ? 'text-text-subtle'
+    : delta > 0
+      ? 'text-danger'
+      : 'text-success'
+  const label = stable
+    ? 'flat vs 90d ago'
+    : `${delta > 0 ? '+' : ''}${delta} vs 90d ago`
+  return (
+    <span
+      className={classNames('text-[10px] tabular-nums w-9 text-right', color)}
+      title={label}
+    >
+      {symbol}
+      {!stable && (
+        <span className="ml-0.5">
+          {delta > 0 ? '+' : ''}
+          {delta}
+        </span>
+      )}
+    </span>
+  )
+}
+
 function SellabilityCard({
   watches,
   wearLog,
@@ -1248,6 +1318,24 @@ function SellabilityCard({
     }
     return total
   }, [ranking, watchById])
+
+  // 26-week (~6 month) score history per watch. For sold watches we end at
+  // sale date so the sparkline shows the lead-up to the sale, not zeros from
+  // post-sale. ~360 sellabilityForWatch calls total — fine for ~15 watches.
+  const HISTORY_WEEKS = 26
+  const historyByWatch = useMemo(() => {
+    const m = new Map<string, Array<{ asOf: string; score: number }>>()
+    for (const r of ranking) {
+      const w = watchById.get(r.watchId)
+      if (!w) continue
+      const endAsOf = w.status === 'sold' && w.saleDate ? w.saleDate : undefined
+      m.set(
+        r.watchId,
+        sellabilityHistory(w, watches, wearLog, HISTORY_WEEKS, endAsOf),
+      )
+    }
+    return m
+  }, [ranking, watchById, watches, wearLog])
 
   const action = (
     <div className="flex items-center gap-3">
@@ -1401,6 +1489,8 @@ function SellabilityCard({
                     )}
                   </div>
                 )}
+                <Sparkline history={historyByWatch.get(r.watchId) ?? []} />
+                <TrendArrow history={historyByWatch.get(r.watchId) ?? []} />
                 <div className="flex items-center gap-2">
                   <div className="w-24 h-1.5 rounded-full bg-surface-2 overflow-hidden">
                     <div
