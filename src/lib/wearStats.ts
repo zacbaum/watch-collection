@@ -339,7 +339,14 @@ export interface SellabilityResult {
 
 /** Fair-share under-percentage in a single window ending at asOfIso. Returns
  *  0..1; higher = the target watch got less than its 1/N share of wear-days
- *  among the watches owned at that point in time. */
+ *  among the watches that were in rotation during the window.
+ *
+ *  "In rotation during the window" = any watch that was owned at any point
+ *  in [windowStart, asOfIso]. This means a watch sold yesterday still counts
+ *  toward last-year's fair-share divisor (correct: last year there genuinely
+ *  WAS one more watch in rotation), and a sold watch's own at-sale snapshot
+ *  includes itself in the divisor (correct: at the moment of sale, it was
+ *  still part of the rotation it's being measured against). */
 function fairShareUnderWindow(
   target: Watch,
   watches: Watch[],
@@ -347,27 +354,32 @@ function fairShareUnderWindow(
   asOfIso: string,
   windowDays: number,
 ): number {
-  const owned = watches.filter((w) => {
+  const windowStartMs = parseISO(asOfIso).getTime() - windowDays * 86_400_000
+  const windowStartIso = format(new Date(windowStartMs), 'yyyy-MM-dd')
+
+  const inRotation = watches.filter((w) => {
+    if (w.id === target.id) return true // target always counts in its own snapshot
     const acq = w.acquisitionDate
-    if (!acq || acq > asOfIso) return false
-    if (w.status === 'sold' && w.saleDate && w.saleDate <= asOfIso) return false
-    if (w.status === 'gifted' && w.giftedDate && w.giftedDate <= asOfIso)
+    if (!acq || acq > asOfIso) return false // not yet acquired by window end
+    // Sold/gifted before the window even started → not in rotation during it.
+    if (w.status === 'sold' && w.saleDate && w.saleDate < windowStartIso) return false
+    if (w.status === 'gifted' && w.giftedDate && w.giftedDate < windowStartIso)
       return false
     return true
   })
-  if (owned.length < 2) return 0
-  const cutoffMs = parseISO(asOfIso).getTime() - windowDays * 86_400_000
-  const ownedIds = new Set(owned.map((w) => w.id))
+  if (inRotation.length < 2) return 0
+
+  const rotationIds = new Set(inRotation.map((w) => w.id))
   const inWindow = wearLog.filter(
     (e) =>
-      ownedIds.has(e.watchId) &&
+      rotationIds.has(e.watchId) &&
       e.date <= asOfIso &&
-      parseISO(e.date).getTime() >= cutoffMs,
+      parseISO(e.date).getTime() >= windowStartMs,
   )
   const totalWears = inWindow.length
   if (totalWears === 0) return 0
   const targetWears = inWindow.filter((e) => e.watchId === target.id).length
-  const expected = totalWears / owned.length
+  const expected = totalWears / inRotation.length
   if (expected === 0) return 0
   return Math.max(0, Math.min(1, 1 - targetWears / expected))
 }
