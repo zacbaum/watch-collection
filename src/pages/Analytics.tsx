@@ -1395,6 +1395,10 @@ function SellabilityCard({
         across 90/180/365-day windows so a single busy month can't hide
         consistent under-use). Pure wear-pattern derived — no price input.
         Hover any row for the per-component breakdown. Gifted watches faded.
+        Fair-share divisor counts every watch in rotation during the window
+        equally, regardless of how long it was owned — so a sold watch's
+        365d snapshot over-states its under-share if it was only owned for
+        part of that year.
       </div>
       {capitalAtRisk > 0 && (
         <div className="mb-3 px-3 py-2 rounded-md bg-surface-2/60 border border-border text-xs flex items-baseline justify-between">

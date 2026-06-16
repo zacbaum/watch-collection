@@ -346,7 +346,16 @@ export interface SellabilityResult {
  *  toward last-year's fair-share divisor (correct: last year there genuinely
  *  WAS one more watch in rotation), and a sold watch's own at-sale snapshot
  *  includes itself in the divisor (correct: at the moment of sale, it was
- *  still part of the rotation it's being measured against). */
+ *  still part of the rotation it's being measured against).
+ *
+ *  Simplification: the divisor treats every in-rotation watch equally,
+ *  regardless of how many days it was actually owned during the window. For
+ *  a watch owned the full window this is exact. For a watch owned only part
+ *  of the window (e.g. a recently-sold or recently-acquired watch over a
+ *  365d snapshot) the calc over-states its under-share, because totalWears
+ *  is divided across N watches as if each had the full window to accumulate.
+ *  The avg over 90/180/365 partially absorbs this since shorter windows are
+ *  mostly covered by ownership for any non-trivially-owned watch. */
 function fairShareUnderWindow(
   target: Watch,
   watches: Watch[],
