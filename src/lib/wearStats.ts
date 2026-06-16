@@ -307,6 +307,19 @@ export function yearsCovered(wearLog: WearLogEntry[]): number[] {
 // The rationale field surfaces the single biggest contributor in plain English
 // so the table can give a "why" without exposing the math.
 
+export interface SellabilityComponents {
+  /** 0-1 dormancy contribution */
+  dormancy: number
+  /** 0-1 wear-rate drop-off contribution */
+  dropoff: number
+  /** 0-1 one-off/fling contribution */
+  oneOff: number
+  /** Component weights as used to compute the final score (sum = 1) */
+  weights: { dormancy: number; dropoff: number; oneOff: number }
+  /** Per-component short explanations matching the row's actual data */
+  reasons: { dormancy: string; dropoff: string; oneOff: string }
+}
+
 export interface SellabilityResult {
   watchId: string
   score: number
@@ -314,19 +327,30 @@ export interface SellabilityResult {
   wearsLast365: number
   daysSinceWorn: number | null
   daysOwned: number | null
+  /** ISO yyyy-MM-dd the score was computed against — sale date for sold
+   *  watches (so the snapshot reflects "would this have been a good time to
+   *  sell?"), today's date for owned. */
+  asOf: string
+  /** True if asOf is the watch's saleDate rather than today. */
+  atSaleDate: boolean
   rationale: string
+  components: SellabilityComponents
 }
 
 export function sellabilityForWatch(
   watch: Watch,
   wearLog: WearLogEntry[],
+  asOfIso?: string,
 ): SellabilityResult {
+  const todayIso = asOfIso ?? format(new Date(), 'yyyy-MM-dd')
+
+  // Drop any wears after the as-of date so a sold watch's pre-sale snapshot
+  // doesn't include any post-sale entries.
   const wears = wearLog
-    .filter((e) => e.watchId === watch.id)
+    .filter((e) => e.watchId === watch.id && e.date <= todayIso)
     .map((e) => e.date)
     .sort()
 
-  const todayIso = format(new Date(), 'yyyy-MM-dd')
   const wearsTotal = wears.length
   const lastWornDate = wears.length > 0 ? wears[wears.length - 1] : null
   const firstWornDate = wears.length > 0 ? wears[0] : null
@@ -338,7 +362,7 @@ export function sellabilityForWatch(
   const daysOwned =
     acqDate ? Math.max(1, differenceInDays(parseISO(todayIso), parseISO(acqDate))) : null
 
-  // Last-365-days wear count
+  // Last-365-days wear count (relative to as-of, not today)
   const cutoffMs = parseISO(todayIso).getTime() - 365 * 86_400_000
   const wearsLast365 = wears.filter((d) => parseISO(d).getTime() >= cutoffMs).length
 
@@ -390,33 +414,46 @@ export function sellabilityForWatch(
     }
   }
 
-  const score = Math.round(100 * (0.45 * dormancy + 0.4 * dropoff + 0.15 * oneOff))
+  const weights = { dormancy: 0.45, dropoff: 0.4, oneOff: 0.15 }
+  const score = Math.round(
+    100 * (weights.dormancy * dormancy + weights.dropoff * dropoff + weights.oneOff * oneOff),
+  )
 
-  // ─ Rationale: pick the largest contributor and translate to plain words ─
-  const contributions: Array<{ key: string; weighted: number }> = [
-    { key: 'dormancy', weighted: 0.45 * dormancy },
-    { key: 'dropoff', weighted: 0.4 * dropoff },
-    { key: 'oneOff', weighted: 0.15 * oneOff },
+  // ─ Per-component reason text (used by the hover tooltip) ───────
+  const reasons = {
+    dormancy:
+      daysSinceWorn == null
+        ? 'never worn'
+        : `${daysSinceWorn} days since last wear`,
+    dropoff: (() => {
+      if (wearsTotal === 0 && daysOwned != null && daysOwned > 90)
+        return 'never engaged after 90+ days owned'
+      if (daysOwned != null && daysOwned <= 90)
+        return 'owned too briefly to judge drop-off'
+      if (dropoff === 0) return 'recent wear rate matches or exceeds lifetime'
+      const pct = Math.round(dropoff * 100)
+      return `recent wear rate is ${pct}% below lifetime`
+    })(),
+    oneOff: (() => {
+      if (wearsTotal === 0) return 'never worn'
+      if (daysOwned != null && daysOwned < 60)
+        return 'owned too briefly to judge one-off'
+      if (oneOff === 0) return 'wears spread across ownership'
+      if (wearsTotal === 1) return 'worn just once'
+      if (wearsTotal <= 5) return `only ${wearsTotal} wears, none recent`
+      return 'wears clustered early, then abandoned'
+    })(),
+  }
+
+  // ─ Top-level rationale: largest weighted contributor ───────────
+  const contributions: Array<{ key: keyof typeof weights; weighted: number }> = [
+    { key: 'dormancy', weighted: weights.dormancy * dormancy },
+    { key: 'dropoff', weighted: weights.dropoff * dropoff },
+    { key: 'oneOff', weighted: weights.oneOff * oneOff },
   ]
   contributions.sort((a, b) => b.weighted - a.weighted)
   const top = contributions[0]
-
-  let rationale = 'regularly worn'
-  if (top.weighted > 0) {
-    if (top.key === 'dormancy') {
-      rationale =
-        daysSinceWorn == null
-          ? 'never worn'
-          : `${daysSinceWorn} days since last wear`
-    } else if (top.key === 'dropoff') {
-      rationale = 'wear rate dropped vs historical'
-    } else if (top.key === 'oneOff') {
-      if (wearsTotal === 0) rationale = 'never worn'
-      else if (wearsTotal === 1) rationale = 'worn just once'
-      else if (wearsTotal <= 5) rationale = `only ${wearsTotal} wears, none recent`
-      else rationale = 'wears clustered early, then abandoned'
-    }
-  }
+  const rationale = top.weighted > 0 ? reasons[top.key] : 'regularly worn'
 
   return {
     watchId: watch.id,
@@ -425,18 +462,30 @@ export function sellabilityForWatch(
     wearsLast365,
     daysSinceWorn,
     daysOwned,
+    asOf: todayIso,
+    atSaleDate: asOfIso != null,
     rationale,
+    components: { dormancy, dropoff, oneOff, weights, reasons },
   }
 }
 
-/** Convenience: owned watches ranked by sellability descending. */
+/** Owned watches ranked by sellability descending. Pass includeSold to also
+ *  include sold watches — their scores are computed as of the sale date so
+ *  the snapshot answers "was this a good time to sell?" rather than "would
+ *  it be a good time to sell today?". */
 export function sellabilityRanking(
   watches: Watch[],
   wearLog: WearLogEntry[],
+  options: { includeSold?: boolean } = {},
 ): SellabilityResult[] {
-  return watches
-    .filter((w) => w.status === 'owned')
-    .map((w) => sellabilityForWatch(w, wearLog))
+  const candidates = options.includeSold
+    ? watches.filter((w) => w.status === 'owned' || w.status === 'sold')
+    : watches.filter((w) => w.status === 'owned')
+  return candidates
+    .map((w) => {
+      const asOf = w.status === 'sold' && w.saleDate ? w.saleDate : undefined
+      return sellabilityForWatch(w, wearLog, asOf)
+    })
     .sort((a, b) => b.score - a.score)
 }
 

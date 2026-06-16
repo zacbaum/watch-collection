@@ -1215,13 +1215,29 @@ function SellabilityCard({
   wearLog: WearLogEntry[]
   watchColors: Map<string, string>
 }) {
-  const rows = useMemo(() => sellabilityRanking(watches, wearLog), [watches, wearLog])
+  const [showSold, setShowSold] = useState(false)
+  const rows = useMemo(
+    () => sellabilityRanking(watches, wearLog, { includeSold: showSold }),
+    [watches, wearLog, showSold],
+  )
   const watchById = useMemo(() => new Map(watches.map((w) => [w.id, w])), [watches])
+
+  const showSoldToggle = (
+    <label className="text-[11px] text-text-muted inline-flex items-center gap-1.5 cursor-pointer select-none">
+      <input
+        type="checkbox"
+        checked={showSold}
+        onChange={(e) => setShowSold(e.target.checked)}
+        className="accent-accent"
+      />
+      Include sold (snapshot at sale date)
+    </label>
+  )
 
   if (rows.length === 0) {
     return (
-      <Card title="Sellability">
-        <div className="text-xs text-text-muted">No owned watches to rank.</div>
+      <Card title="Sellability" action={showSoldToggle}>
+        <div className="text-xs text-text-muted">No watches to rank.</div>
       </Card>
     )
   }
@@ -1233,22 +1249,56 @@ function SellabilityCard({
   }
 
   return (
-    <Card title="Sellability · owned watches ranked by wear-pattern signals">
+    <Card
+      title="Sellability · owned watches ranked by wear-pattern signals"
+      action={showSoldToggle}
+    >
       <div className="text-[11px] text-text-muted mb-3">
         Higher = more sellable. Composite of dormancy (45%, saturates at 6
         months idle), wear-rate drop-off vs lifetime (40%, never-worn after
         90 days = max signal), and one-off-ness (15%, brief-fling bonus).
-        Pure wear-pattern derived — no price input.
+        Pure wear-pattern derived — no price input. Hover any row for the
+        per-component breakdown.
       </div>
       <ul className="divide-y divide-border -mx-3 sm:-mx-4">
         {rows.map((r) => {
           const w = watchById.get(r.watchId)
           if (!w) return null
           const color = watchColors.get(w.id) ?? '#cccccc'
+          const c = r.components
+          const parts: Array<{
+            key: 'dormancy' | 'dropoff' | 'oneOff'
+            label: string
+            value: number
+            max: number
+            reason: string
+          }> = [
+            {
+              key: 'dormancy',
+              label: 'Dormancy',
+              value: Math.round(c.weights.dormancy * c.dormancy * 100),
+              max: Math.round(c.weights.dormancy * 100),
+              reason: c.reasons.dormancy,
+            },
+            {
+              key: 'dropoff',
+              label: 'Drop-off',
+              value: Math.round(c.weights.dropoff * c.dropoff * 100),
+              max: Math.round(c.weights.dropoff * 100),
+              reason: c.reasons.dropoff,
+            },
+            {
+              key: 'oneOff',
+              label: 'One-off',
+              value: Math.round(c.weights.oneOff * c.oneOff * 100),
+              max: Math.round(c.weights.oneOff * 100),
+              reason: c.reasons.oneOff,
+            },
+          ]
           return (
             <li
               key={r.watchId}
-              className="px-3 sm:px-4 py-2 grid grid-cols-[1fr_auto] gap-3 items-center"
+              className="group relative px-3 sm:px-4 py-2 grid grid-cols-[1fr_auto] gap-3 items-center hover:bg-surface-2/40 transition-colors"
             >
               <div className="min-w-0">
                 <div className="flex items-center gap-2 min-w-0">
@@ -1260,6 +1310,11 @@ function SellabilityCard({
                     {w.brand}{' '}
                     <span className="text-text-muted">{w.model}</span>
                   </span>
+                  {r.atSaleDate && (
+                    <span className="text-[10px] uppercase tracking-wide text-text-subtle border border-border rounded px-1 py-px shrink-0">
+                      at sale
+                    </span>
+                  )}
                 </div>
                 <div className="text-[11px] text-text-muted mt-0.5 truncate">
                   {r.rationale} · {r.wearsTotal} total wear{r.wearsTotal === 1 ? '' : 's'}
@@ -1269,10 +1324,7 @@ function SellabilityCard({
                 </div>
               </div>
               <div className="flex items-center gap-2 shrink-0">
-                <div
-                  className="w-24 h-1.5 rounded-full bg-surface-2 overflow-hidden"
-                  title={`${r.score}/100`}
-                >
+                <div className="w-24 h-1.5 rounded-full bg-surface-2 overflow-hidden">
                   <div
                     className="h-full rounded-full"
                     style={{
@@ -1287,6 +1339,40 @@ function SellabilityCard({
                 >
                   {r.score}
                 </div>
+              </div>
+              {/* Hover-only component breakdown. Anchored to row's right
+                  edge, sits above; on the first row the card edge will clip
+                  it slightly — acceptable trade-off vs measuring viewport. */}
+              <div
+                className="pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity absolute right-3 sm:right-4 bottom-full mb-1 z-20 w-72 bg-bg border border-border rounded-md shadow-md p-2.5 text-[11px]"
+                role="tooltip"
+              >
+                <div className="flex items-baseline justify-between mb-1.5">
+                  <span className="font-medium text-text">Score breakdown</span>
+                  <span className="text-text-subtle tabular-nums">
+                    {r.score}/100
+                  </span>
+                </div>
+                {r.atSaleDate && (
+                  <div className="text-[10px] text-text-subtle mb-1.5">
+                    as of sale date {r.asOf}
+                  </div>
+                )}
+                <ul className="space-y-1.5">
+                  {parts.map((p) => (
+                    <li key={p.key}>
+                      <div className="flex items-baseline justify-between">
+                        <span className="text-text">{p.label}</span>
+                        <span className="tabular-nums text-text-muted">
+                          {p.value}/{p.max}
+                        </span>
+                      </div>
+                      <div className="text-text-subtle text-[10px] leading-snug">
+                        {p.reason}
+                      </div>
+                    </li>
+                  ))}
+                </ul>
               </div>
             </li>
           )
