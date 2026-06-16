@@ -1214,22 +1214,31 @@ function sparkColor(score: number): string {
 }
 
 function Sparkline({ history }: { history: Array<{ asOf: string; score: number }> }) {
-  if (history.length === 0) return null
   const W = 56
   const H = 14
-  const bw = W / history.length
+  const N = history.length
+  if (N < 2) return <svg width={W} height={H} className="block shrink-0" aria-hidden />
+  const x = (i: number) => (i / (N - 1)) * (W - 2) + 1
+  const y = (score: number) => H - (score / 100) * (H - 2) - 1
+  // Render the polyline as N-1 short segments so each can pick up the colour
+  // band (green/amber/red) of its own score region. Average of the two
+  // endpoints' scores picks the segment colour, so the line shifts colour at
+  // the band boundaries rather than at a single point.
   return (
     <svg width={W} height={H} className="block shrink-0" aria-hidden>
-      {history.map((p, i) => {
-        const h = Math.max(1, (p.score / 100) * H)
+      {history.slice(1).map((p, i) => {
+        const prev = history[i]
+        const avg = (prev.score + p.score) / 2
         return (
-          <rect
+          <line
             key={p.asOf}
-            x={i * bw}
-            y={H - h}
-            width={Math.max(1, bw - 0.5)}
-            height={h}
-            fill={sparkColor(p.score)}
+            x1={x(i)}
+            y1={y(prev.score)}
+            x2={x(i + 1)}
+            y2={y(p.score)}
+            stroke={sparkColor(avg)}
+            strokeWidth={1.5}
+            strokeLinecap="round"
           />
         )
       })}
@@ -1266,12 +1275,7 @@ function TrendArrow({
       title={label}
     >
       {symbol}
-      {!stable && (
-        <span className="ml-0.5">
-          {delta > 0 ? '+' : ''}
-          {delta}
-        </span>
-      )}
+      {!stable && <span className="ml-0.5">{Math.abs(delta)}</span>}
     </span>
   )
 }
