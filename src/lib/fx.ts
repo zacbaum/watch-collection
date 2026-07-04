@@ -50,13 +50,18 @@ export async function historicalRate(
   return rate
 }
 
-/** Convert a Money amount to GBP using historical rates on a given date. */
+/** Convert a Money amount to GBP using historical rates on a given date.
+ *  Throws when the rate can't be fetched — the old silent fallback recorded
+ *  the raw foreign amount as GBP, which quietly corrupted every P/L number
+ *  downstream. Callers surface the error and let the user retry. */
 export async function toGbp(money: Money, date: string): Promise<number> {
   if (money.currency === 'GBP') return money.amount
   try {
     const rate = await historicalRate(date, money.currency, 'GBP')
     return money.amount * rate
-  } catch {
-    return money.amount
+  } catch (e) {
+    throw new Error(
+      `Couldn't convert ${money.currency} to GBP (${(e as Error).message}). Check your connection and save again.`,
+    )
   }
 }

@@ -514,6 +514,7 @@ function EditForm({ watch, onClose }: { watch: Watch; onClose: () => void }) {
   const { mutate, backupPhoto } = useDataContext()
   const [w, setW] = useState<Watch>({ ...watch })
   const [busy, setBusy] = useState(false)
+  const [saveErr, setSaveErr] = useState<string | null>(null)
   const [photoBusy, setPhotoBusy] = useState(false)
   const [photoError, setPhotoError] = useState<string | null>(null)
   const fileRef = useRef<HTMLInputElement | null>(null)
@@ -559,6 +560,7 @@ function EditForm({ watch, onClose }: { watch: Watch; onClose: () => void }) {
 
   async function handleSave() {
     setBusy(true)
+    setSaveErr(null)
     try {
       const updated: Watch = { ...w, updatedAt: new Date().toISOString() }
 
@@ -591,6 +593,10 @@ function EditForm({ watch, onClose }: { watch: Watch; onClose: () => void }) {
         { message: `Update ${updated.brand} ${updated.model}` },
       )
       onClose()
+    } catch (e) {
+      // Typically an FX lookup failure — nothing was saved; the user can
+      // retry once online or switch the price currency to GBP.
+      setSaveErr((e as Error).message)
     } finally {
       setBusy(false)
     }
@@ -807,6 +813,7 @@ function EditForm({ watch, onClose }: { watch: Watch; onClose: () => void }) {
           </div>
         )}
       </div>
+      {saveErr && <div className="mt-3 text-xs text-danger">{saveErr}</div>}
       <div className="mt-4 flex justify-end gap-2">
         <button onClick={onClose} className="px-3 py-1.5 text-xs rounded-md border border-border">
           Cancel
