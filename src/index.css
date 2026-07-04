@@ -113,3 +113,45 @@ html[data-dark="1"] {
   --color-sold: #8f8577;
   --color-gifted: #b191cc;
 }
+
+/* ─── Goodwood (optional palette) ────────────────────────────────────────
+ * Stone-paper neutrals + British racing green, from the same design panel.
+ * Toggled by [data-theme="goodwood"]; combines with [data-dark="1"].
+ * sold darkened from the panel's #8B8578 to pass 4.5:1 as text. */
+html[data-theme="goodwood"] {
+  --color-bg: #f4f1ea;
+  --color-surface: #fbf9f4;
+  --color-surface-2: #ece7dc;
+  --color-border: #e1dcce;
+  --color-border-strong: #c6bfad;
+  --color-text: #1f2620;
+  --color-text-muted: #575f55;
+  --color-text-subtle: #7e8579;
+  --color-accent: #1d5038;
+  --color-accent-soft: #e1ebe2;
+  --color-on-accent: #fbf9f4;
+  --color-success: #2c7a43;
+  --color-warning: #8f6512;
+  --color-danger: #b23a2e;
+  --color-sold: #6f6a5b;
+  --color-gifted: #40657f;
+}
+html[data-theme="goodwood"][data-dark="1"] {
+  --color-bg: #121613;
+  --color-surface: #191f1a;
+  --color-surface-2: #222924;
+  --color-border: #2a322c;
+  --color-border-strong: #3c463f;
+  --color-text: #ebe8df;
+  --color-text-muted: #a4ac9f;
+  --color-text-subtle: #737b72;
+  --color-accent: #57a47d;
+  --color-accent-soft: #1e2f26;
+  --color-on-accent: #121613;
+  --color-success: #7cc168;
+  --color-warning: #d6a748;
+  --color-danger: #e0685a;
+  --color-sold: #8f897c;
+  --color-gifted: #7ba5c2;
+}
+

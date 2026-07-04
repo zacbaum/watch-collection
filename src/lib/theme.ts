@@ -1,9 +1,15 @@
-// Light/dark mode controller. The app has ONE palette (Gilt Champagne,
-// defined in index.css); the only preference is mode:
-//   'auto' | 'light' | 'dark' — auto tracks prefers-color-scheme.
-// Stored in localStorage and applied as [data-dark="1"] on <html>.
+// Appearance controller. Two curated palettes (Gilt Champagne default,
+// Goodwood alternative — both from the same design panel) × three modes
+// ('auto' tracks prefers-color-scheme). Stored in localStorage, applied as
+// [data-theme] / [data-dark] on <html>.
 
+export type ThemeName = 'champagne' | 'goodwood'
 export type ModeName = 'auto' | 'light' | 'dark'
+
+export const THEMES: Array<{ key: ThemeName; label: string }> = [
+  { key: 'champagne', label: 'Gilt Champagne' },
+  { key: 'goodwood', label: 'Goodwood' },
+]
 
 export const MODES: Array<{ key: ModeName; label: string }> = [
   { key: 'auto', label: 'Auto (system)' },
@@ -11,7 +17,28 @@ export const MODES: Array<{ key: ModeName; label: string }> = [
   { key: 'dark', label: 'Dark' },
 ]
 
+// Reuses the pre-champagne key; stale values ('warm' etc.) fail validation
+// and fall back to champagne.
+const THEME_KEY = 'watch-collection.theme.v1'
 const MODE_KEY = 'watch-collection.mode.v1'
+
+export function getTheme(): ThemeName {
+  const v = localStorage.getItem(THEME_KEY)
+  if (THEMES.some((t) => t.key === v)) return v as ThemeName
+  return 'champagne'
+}
+
+export function setTheme(t: ThemeName): void {
+  localStorage.setItem(THEME_KEY, t)
+  applyTheme(t)
+}
+
+function applyTheme(t: ThemeName): void {
+  // Champagne is the :root default — no attribute needed.
+  if (t === 'champagne') delete document.documentElement.dataset.theme
+  else document.documentElement.dataset.theme = t
+  syncThemeColorMeta()
+}
 
 export function getMode(): ModeName {
   const v = localStorage.getItem(MODE_KEY)
@@ -56,6 +83,7 @@ function syncThemeColorMeta(): void {
 
 /** Call once at app boot to apply persisted prefs and start watching system. */
 export function bootTheme(): void {
+  applyTheme(getTheme())
   applyMode(getMode())
 
   // Re-apply when the OS preference changes (only if user is on 'auto')

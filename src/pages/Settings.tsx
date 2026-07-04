@@ -14,7 +14,16 @@ import {
   CloudUpload,
   History,
 } from 'lucide-react'
-import { MODES, getMode, setMode, type ModeName } from '../lib/theme'
+import {
+  MODES,
+  THEMES,
+  getMode,
+  getTheme,
+  setMode,
+  setTheme,
+  type ModeName,
+  type ThemeName,
+} from '../lib/theme'
 import { classNames } from '../lib/utils'
 
 export function Settings() {
@@ -29,8 +38,13 @@ export function Settings() {
   const [testResult, setTestResult] = useState<
     { ok: boolean; message: string } | null
   >(null)
+  const [theme, setThemeState] = useState<ThemeName>(getTheme())
   const [mode, setModeState] = useState<ModeName>(getMode())
 
+  function pickTheme(t: ThemeName) {
+    setThemeState(t)
+    setTheme(t)
+  }
   function pickMode(m: ModeName) {
     setModeState(m)
     setMode(m)
@@ -70,25 +84,50 @@ export function Settings() {
       <h1 className="text-2xl font-display font-medium tracking-tight">Settings</h1>
 
       <Card title="Appearance">
-        <div className="inline-flex border border-border rounded-md overflow-hidden text-xs">
-          {MODES.map((m) => (
-            <button
-              key={m.key}
-              type="button"
-              onClick={() => pickMode(m.key)}
-              className={classNames(
-                'px-3 py-1.5',
-                mode === m.key
-                  ? 'bg-surface-2 text-text font-medium'
-                  : 'text-text-muted hover:bg-surface',
-              )}
-            >
-              {m.label}
-            </button>
-          ))}
-        </div>
-        <div className="text-[11px] text-text-subtle mt-1">
-          "Auto" follows your OS preference and updates if you toggle it system-wide.
+        <div className="space-y-4">
+          <div>
+            <div className="text-xs text-text-muted mb-2">Palette</div>
+            <div className="inline-flex border border-border rounded-md overflow-hidden text-xs">
+              {THEMES.map((t) => (
+                <button
+                  key={t.key}
+                  type="button"
+                  onClick={() => pickTheme(t.key)}
+                  className={classNames(
+                    'px-3 py-1.5',
+                    theme === t.key
+                      ? 'bg-surface-2 text-text font-medium'
+                      : 'text-text-muted hover:bg-surface',
+                  )}
+                >
+                  {t.label}
+                </button>
+              ))}
+            </div>
+          </div>
+          <div>
+            <div className="text-xs text-text-muted mb-2">Mode</div>
+            <div className="inline-flex border border-border rounded-md overflow-hidden text-xs">
+              {MODES.map((m) => (
+                <button
+                  key={m.key}
+                  type="button"
+                  onClick={() => pickMode(m.key)}
+                  className={classNames(
+                    'px-3 py-1.5',
+                    mode === m.key
+                      ? 'bg-surface-2 text-text font-medium'
+                      : 'text-text-muted hover:bg-surface',
+                  )}
+                >
+                  {m.label}
+                </button>
+              ))}
+            </div>
+            <div className="text-[11px] text-text-subtle mt-1">
+              "Auto" follows your OS preference and updates if you toggle it system-wide.
+            </div>
+          </div>
         </div>
       </Card>
 
