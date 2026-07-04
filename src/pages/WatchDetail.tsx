@@ -12,6 +12,7 @@ import type {
   Money,
   ServiceLogEntry,
   ServiceType,
+  Valuation,
   Watch,
   WatchCategory,
   WatchStatus,
@@ -19,6 +20,16 @@ import type {
   Movement,
 } from '../types'
 import { serviceDue } from '../lib/service'
+import {
+  ResponsiveContainer,
+  LineChart,
+  Line,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  ReferenceLine,
+} from 'recharts'
 import {
   daysSince,
   formatDate,
@@ -278,6 +289,8 @@ function WatchDetailInner() {
         <MetadataView watch={watch} />
       )}
 
+      <ValueHistorySection watch={watch} valuations={data.valuations} />
+
       <WearInsights wears={wears} />
 
       <ServiceSection watch={watch} serviceLog={data.serviceLog} />
@@ -422,6 +435,85 @@ function InsightTile({
       <div className="text-base font-semibold mt-0.5 tabular-nums">{value}</div>
       {sub && <div className="text-[10px] text-text-muted mt-0.5">{sub}</div>}
     </div>
+  )
+}
+
+function ValueHistorySection({
+  watch,
+  valuations,
+}: {
+  watch: Watch
+  valuations: Valuation[]
+}) {
+  const points = useMemo(
+    () =>
+      valuations
+        .filter((v) => v.watchId === watch.id)
+        .sort((a, b) => a.date.localeCompare(b.date))
+        .map((v) => ({ date: v.date, valueGbp: v.valueGbp })),
+    [valuations, watch.id],
+  )
+  // One point is just the current value restated — chart from two onwards.
+  if (points.length < 2) return null
+
+  const acq = watch.acquisitionPriceGbp
+
+  return (
+    <Card title="Value history">
+      <div className="h-44">
+        <ResponsiveContainer width="100%" height="100%">
+          <LineChart data={points} margin={{ top: 8, right: 12, bottom: 4, left: 4 }}>
+            <CartesianGrid stroke="var(--color-border)" />
+            <XAxis
+              dataKey="date"
+              fontSize={10}
+              tickFormatter={(d) => formatDate(String(d), 'MMM yy')}
+            />
+            <YAxis
+              fontSize={10}
+              width={44}
+              domain={['auto', 'auto']}
+              tickFormatter={(v) => `£${(Number(v) / 1000).toFixed(1)}k`}
+            />
+            <Tooltip
+              contentStyle={{
+                fontSize: 11,
+                backgroundColor: 'var(--color-bg)',
+                border: '1px solid var(--color-border)',
+                borderRadius: 6,
+                color: 'var(--color-text)',
+              }}
+              labelFormatter={(d) => formatDate(String(d))}
+              formatter={(v) => [formatGbp(Number(v)), 'Value']}
+            />
+            {acq != null && acq > 0 && (
+              <ReferenceLine
+                y={acq}
+                stroke="var(--color-text-subtle)"
+                strokeDasharray="4 3"
+                label={{
+                  value: 'paid',
+                  position: 'insideBottomRight',
+                  fontSize: 9,
+                  fill: 'var(--color-text-subtle)',
+                }}
+              />
+            )}
+            <Line
+              type="monotone"
+              dataKey="valueGbp"
+              stroke="var(--color-accent)"
+              strokeWidth={2}
+              dot={{ r: 3 }}
+              isAnimationActive={false}
+            />
+          </LineChart>
+        </ResponsiveContainer>
+      </div>
+      <div className="text-[11px] text-text-subtle mt-1">
+        Recorded automatically each time the current value changes in Edit.
+      </div>
+    </Card>
   )
 }
 
@@ -798,10 +890,49 @@ function EditForm({ watch, onClose }: { watch: Watch; onClose: () => void }) {
       }
 
       await mutate(
-        (d) => ({
-          ...d,
-          watches: d.watches.map((x) => (x.id === updated.id ? updated : x)),
-        }),
+        (d) => {
+          // Auto-record valuation history when the current value changed.
+          let valuations = d.valuations
+          if (
+            updated.currentValue &&
+            updated.currentValueGbp != null &&
+            updated.currentValueGbp !== watch.currentValueGbp
+          ) {
+            const valDate = updated.valueDate ?? new Date().toISOString().slice(0, 10)
+            // Seed the previous value first if this watch has no history yet,
+            // so the chart starts with a real "before" point.
+            const hasHistory = valuations.some((v) => v.watchId === updated.id)
+            if (!hasHistory && watch.currentValue && watch.currentValueGbp != null) {
+              valuations = [
+                ...valuations,
+                {
+                  id: nanoid(8),
+                  watchId: updated.id,
+                  date: watch.valueDate ?? watch.updatedAt.slice(0, 10),
+                  value: watch.currentValue,
+                  valueGbp: watch.currentValueGbp,
+                },
+              ]
+            }
+            valuations = [
+              // One valuation per watch per date — re-saving today corrects
+              // today's entry rather than duplicating it.
+              ...valuations.filter((v) => !(v.watchId === updated.id && v.date === valDate)),
+              {
+                id: nanoid(8),
+                watchId: updated.id,
+                date: valDate,
+                value: updated.currentValue,
+                valueGbp: updated.currentValueGbp,
+              },
+            ]
+          }
+          return {
+            ...d,
+            watches: d.watches.map((x) => (x.id === updated.id ? updated : x)),
+            valuations,
+          }
+        },
         { message: `Update ${updated.brand} ${updated.model}` },
       )
       onClose()

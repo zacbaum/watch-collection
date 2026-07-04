@@ -37,7 +37,7 @@ import { Empty } from '../components/Empty'
 import { CalendarHeatmap } from '../components/CalendarHeatmap'
 import { TimeRangeFilter } from '../components/TimeRangeFilter'
 import { useData } from '../hooks/useData'
-import type { Watch, WearLogEntry } from '../types'
+import type { Valuation, Watch, WearLogEntry } from '../types'
 import { classNames, formatGbp } from '../lib/utils'
 import { lookupCoords } from '../lib/cityCoords'
 import { buildWatchColorMap } from '../lib/palette'
@@ -153,6 +153,7 @@ function AnalyticsInner() {
         />
         <CashFlowCard watches={data.watches} />
         <WatchFlowCard watches={data.watches} />
+        <CollectionValueCard watches={data.watches} valuations={data.valuations} />
       </div>
 
       <SellabilityCard
@@ -694,6 +695,102 @@ function WatchFlowCard({ watches }: { watches: Watch[] }) {
           )}
         </>
       )}
+    </Card>
+  )
+}
+
+function CollectionValueCard({
+  watches,
+  valuations,
+}: {
+  watches: Watch[]
+  valuations: Valuation[]
+}) {
+  const rows = useMemo(() => {
+    const starts = [
+      ...watches.map((w) => w.acquisitionDate).filter((d): d is string => !!d),
+      ...valuations.map((v) => v.date),
+    ].sort()
+    if (starts.length === 0) return []
+    const months = monthKeysInRange(starts[0], new Date().toISOString().slice(0, 10))
+
+    const valsByWatch = new Map<string, Valuation[]>()
+    for (const v of [...valuations].sort((a, b) => a.date.localeCompare(b.date))) {
+      const arr = valsByWatch.get(v.watchId) ?? []
+      arr.push(v)
+      valsByWatch.set(v.watchId, arr)
+    }
+
+    return months.map((m) => {
+      // '-31' compares correctly against any real ISO date within the month.
+      const monthEnd = `${m}-31`
+      let total = 0
+      for (const w of watches) {
+        if (!w.acquisitionDate || w.acquisitionDate > monthEnd) continue
+        if (w.status === 'sold' && w.saleDate && w.saleDate <= monthEnd) continue
+        if (w.status === 'gifted' && w.giftedDate && w.giftedDate <= monthEnd) continue
+        // Latest valuation up to month end; acquisition price before the
+        // first valuation exists.
+        let val: number | undefined
+        for (const v of valsByWatch.get(w.id) ?? []) {
+          if (v.date <= monthEnd) val = v.valueGbp
+          else break
+        }
+        total += val ?? w.acquisitionPriceGbp ?? 0
+      }
+      return { month: m, total: Math.round(total) }
+    })
+  }, [watches, valuations])
+
+  const hasAny = rows.some((r) => r.total > 0)
+
+  return (
+    <Card title="Collection value over time · valuations carry forward">
+      {!hasAny ? (
+        <div className="text-xs text-text-muted">
+          Needs acquisition dates and prices. Value snapshots record
+          automatically whenever a watch's current value is updated.
+        </div>
+      ) : (
+        <div className="flex-1 min-h-56">
+          <ResponsiveContainer width="100%" height="100%">
+            <LineChart data={rows} margin={{ top: 8, right: 12, bottom: 4, left: 4 }}>
+              <CartesianGrid stroke="var(--color-border)" />
+              <XAxis
+                dataKey="month"
+                fontSize={10}
+                interval="preserveStartEnd"
+                tickFormatter={(m) => {
+                  const [y, mm] = String(m).split('-')
+                  return parseInt(mm, 10) === 1 ? `'${y.slice(2)}` : ''
+                }}
+              />
+              <YAxis
+                fontSize={10}
+                width={44}
+                tickFormatter={(v) => `£${(Number(v) / 1000).toFixed(0)}k`}
+              />
+              <Tooltip
+                contentStyle={TOOLTIP_STYLE}
+                labelStyle={TOOLTIP_LABEL_STYLE}
+                formatter={(v) => [formatGbp(Number(v)), 'Value']}
+              />
+              <Line
+                type="monotone"
+                dataKey="total"
+                stroke="var(--color-accent)"
+                strokeWidth={2}
+                dot={false}
+                isAnimationActive={false}
+              />
+            </LineChart>
+          </ResponsiveContainer>
+        </div>
+      )}
+      <div className="text-[11px] text-text-subtle mt-1">
+        Uses each watch's latest recorded valuation (acquisition price before
+        the first one). Owned watches only, at each point in time.
+      </div>
     </Card>
   )
 }
