@@ -80,6 +80,53 @@ export function Analytics() {
   )
 }
 
+/** Per-watch colour-chip legend. On phones, collapses past 6 chips behind a
+ *  "+N more" toggle — the full list was eating half the viewport under the
+ *  denser charts. */
+function ChipLegend({
+  watches,
+  watchColors,
+}: {
+  watches: Watch[]
+  watchColors: Map<string, string>
+}) {
+  const narrow = useIsNarrow()
+  const [expanded, setExpanded] = useState(false)
+  const LIMIT = 6
+  const collapsible = narrow && watches.length > LIMIT
+  const visible = collapsible && !expanded ? watches.slice(0, LIMIT) : watches
+  return (
+    <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-[11px]">
+      {visible.map((w) => {
+        const inactive = w.status === 'sold' || w.status === 'gifted'
+        return (
+          <span
+            key={w.id}
+            className={`inline-flex items-center gap-1${inactive ? ' opacity-50' : ''}`}
+          >
+            <span
+              className="inline-block w-2.5 h-2.5 rounded-sm"
+              style={{ backgroundColor: watchColors.get(w.id) }}
+            />
+            <span className="text-text">{w.brand}</span>
+            <span className="text-text-muted">{w.model}</span>
+            {inactive && <span className="text-text-subtle">· {w.status}</span>}
+          </span>
+        )
+      })}
+      {collapsible && (
+        <button
+          type="button"
+          onClick={() => setExpanded((e) => !e)}
+          className="text-accent"
+        >
+          {expanded ? 'show less' : `+${watches.length - LIMIT} more`}
+        </button>
+      )}
+    </div>
+  )
+}
+
 function AnalyticsInner() {
   const data = useData()
   const owned = useMemo(() => data.watches.filter((w) => w.status === 'owned'), [data.watches])
@@ -945,24 +992,7 @@ function CostPerWearOverTimeCard({
           </LineChart>
         </ResponsiveContainer>
       </div>
-      <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-[11px]">
-        {eligible.map((w) => {
-          const inactive = w.status === 'sold' || w.status === 'gifted'
-          return (
-            <span
-              key={w.id}
-              className={`inline-flex items-center gap-1${inactive ? ' opacity-50' : ''}`}
-            >
-              <span
-                className="inline-block w-2.5 h-2.5 rounded-sm"
-                style={{ backgroundColor: watchColors.get(w.id) }}
-              />
-              <span className="text-text">{w.brand}</span>
-              <span className="text-text-muted">{w.model}</span>
-            </span>
-          )
-        })}
-      </div>
+      <ChipLegend watches={eligible} watchColors={watchColors} />
     </Card>
   )
 }
@@ -1283,25 +1313,7 @@ function WatchShareCard({
           </BarChart>
         </ResponsiveContainer>
       </div>
-      <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-[11px]">
-        {rankedWatches.map((w) => {
-          const inactive = w.status === 'sold' || w.status === 'gifted'
-          return (
-            <span
-              key={w.id}
-              className={`inline-flex items-center gap-1${inactive ? ' opacity-50' : ''}`}
-            >
-              <span
-                className="inline-block w-2.5 h-2.5 rounded-sm"
-                style={{ backgroundColor: watchColors.get(w.id) }}
-              />
-              <span className="text-text">{w.brand}</span>
-              <span className="text-text-muted">{w.model}</span>
-              {inactive && <span className="text-text-subtle">· {w.status}</span>}
-            </span>
-          )
-        })}
-      </div>
+      <ChipLegend watches={rankedWatches} watchColors={watchColors} />
     </Card>
   )
 }

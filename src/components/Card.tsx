@@ -18,9 +18,11 @@ export function Card({ children, className, title, action, padding = true }: Car
       )}
     >
       {(title || action) && (
-        <div className="flex items-center justify-between px-4 h-10 border-b border-border shrink-0">
-          <div className="text-xs font-medium uppercase tracking-wide text-text-muted">{title}</div>
-          {action}
+        <div className="flex items-center justify-between gap-2 px-4 h-10 border-b border-border shrink-0">
+          <div className="text-xs font-medium uppercase tracking-wide text-text-muted truncate min-w-0">
+            {title}
+          </div>
+          {action && <div className="shrink-0">{action}</div>}
         </div>
       )}
       <div className={classNames(padding && 'p-3 sm:p-4', 'flex-1 flex flex-col min-h-0')}>{children}</div>

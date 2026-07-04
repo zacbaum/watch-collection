@@ -118,13 +118,16 @@ export function CalendarHeatmap({ watches, wearLog, watchColors }: Props) {
         </span>
       </div>
 
-      <div className="w-full">
+      {/* On phones the 53-week grid squeezed into ~350px is unreadable —
+          keep a readable minimum width and let it scroll horizontally.
+          Desktop still scales to fit. */}
+      <div className="w-full overflow-x-auto">
         <svg
           viewBox={`0 0 ${width} ${height}`}
           width="100%"
           height="auto"
           preserveAspectRatio="xMidYMid meet"
-          className="block max-w-full"
+          className="block max-w-none min-w-[560px] sm:max-w-full sm:min-w-0"
         >
           {/* Day-of-week labels */}
           {DAY_LABELS.map((lbl, i) =>
