@@ -113,7 +113,7 @@ function CollectionInner() {
         <h1 className="text-2xl font-display font-medium tracking-tight">Collection</h1>
         <button
           onClick={() => setAdding((a) => !a)}
-          className="px-3 py-1.5 text-xs rounded-md bg-accent text-white flex items-center gap-1"
+          className="px-3 py-1.5 text-xs rounded-md bg-accent text-on-accent flex items-center gap-1"
         >
           <Plus size={14} /> Add watch
         </button>
@@ -575,7 +575,7 @@ function LugWidthHistogramCard({ watches }: { watches: Watch[] }) {
               <XAxis dataKey="width" fontSize={10} />
               <YAxis fontSize={10} allowDecimals={false} />
               <Tooltip contentStyle={TOOLTIP_STYLE} labelStyle={TOOLTIP_LABEL_STYLE} />
-              <Bar dataKey="count" fill="#0d9488" radius={[3, 3, 0, 0]} />
+              <Bar dataKey="count" fill="var(--color-accent)" radius={[3, 3, 0, 0]} />
             </BarChart>
           </ResponsiveContainer>
         </div>
@@ -617,7 +617,7 @@ function DecadeHistogramCard({ watches }: { watches: Watch[] }) {
               <XAxis dataKey="decade" fontSize={10} />
               <YAxis fontSize={10} allowDecimals={false} />
               <Tooltip contentStyle={TOOLTIP_STYLE} labelStyle={TOOLTIP_LABEL_STYLE} />
-              <Bar dataKey="count" fill="#7c3aed" radius={[3, 3, 0, 0]} />
+              <Bar dataKey="count" fill="var(--color-gifted)" radius={[3, 3, 0, 0]} />
             </BarChart>
           </ResponsiveContainer>
         </div>
@@ -682,7 +682,7 @@ function AddWatchForm({
           <button
             type="submit"
             disabled={busy || !brand.trim() || !model.trim()}
-            className="px-3 py-1.5 text-xs rounded-md bg-accent text-white disabled:opacity-50"
+            className="px-3 py-1.5 text-xs rounded-md bg-accent text-on-accent disabled:opacity-50"
           >
             {busy ? 'Saving…' : 'Save'}
           </button>

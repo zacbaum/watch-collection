@@ -72,7 +72,7 @@ export function Layout({ children }: LayoutProps) {
           <NavLink
             to="/log"
             className={classNames(
-              'inline-flex items-center gap-1 px-2.5 py-1 text-xs rounded-md bg-accent text-white hover:opacity-90',
+              'inline-flex items-center gap-1 px-2.5 py-1 text-xs rounded-md bg-accent text-on-accent hover:opacity-90',
               location.pathname === '/log' && 'opacity-80',
             )}
           >

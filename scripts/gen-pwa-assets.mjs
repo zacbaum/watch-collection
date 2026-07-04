@@ -4,7 +4,7 @@
 //   - public/splash/*.png          solid-colour iOS startup images, light+dark
 //
 // The icon is a from-scratch rasterization of public/favicon.svg's geometry
-// (dark rounded square, light strap bars, watch face ring, blue hands).
+// (espresso rounded square, champagne strap bars and ring, gilt hands).
 // Run: node scripts/gen-pwa-assets.mjs
 import { deflateSync } from 'node:zlib'
 import { writeFileSync, mkdirSync } from 'node:fs'
@@ -62,9 +62,9 @@ function encodePng(width, height, pixels, alpha) {
 }
 
 // ─── Icon rasterizer (favicon.svg geometry in 32-unit space) ────────────────
-const BG = [0x1c, 0x19, 0x17]
-const LIGHT = [0xe7, 0xe5, 0xe4]
-const BLUE = [0x25, 0x63, 0xeb]
+const BG = [0x1c, 0x17, 0x12]
+const LIGHT = [0xf2, 0xea, 0xd9]
+const GILT = [0xd0, 0xa7, 0x55]
 
 function distToSegment(px, py, x1, y1, x2, y2) {
   const dx = x2 - x1
@@ -89,7 +89,7 @@ function sampleIcon(x, y, opaque) {
     distToSegment(x, y, 16, 16, 16, 10) <= 1 ||
     distToSegment(x, y, 16, 16, 20, 18) <= 1
   )
-    return [...BLUE, 255]
+    return [...GILT, 255]
   // Ring (2-unit stroke on r=9 circle)
   if (Math.abs(dCenter - 9) <= 1) return [...LIGHT, 255]
   // Strap bars
@@ -138,9 +138,9 @@ function renderSolid(width, height, [r, g, b]) {
   return encodePng(width, height, px, false)
 }
 
-// Warm theme backgrounds (the app default): light #fdfbf6, dark #1c1611
-const SPLASH_LIGHT = [0xfd, 0xfb, 0xf6]
-const SPLASH_DARK = [0x1c, 0x16, 0x11]
+// Gilt Champagne backgrounds: light #f7f2e8, dark #1c1712
+const SPLASH_LIGHT = [0xf7, 0xf2, 0xe8]
+const SPLASH_DARK = [0x1c, 0x17, 0x12]
 
 // Portrait CSS-pixel size + DPR for common iPhones
 export const SPLASH_DEVICES = [

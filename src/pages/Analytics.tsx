@@ -539,8 +539,8 @@ function CashFlowCard({ watches }: { watches: Watch[] }) {
                   )
                 }}
               />
-              <Bar dataKey="spend" stackId="cash" fill="#b91c1c" radius={[4, 4, 0, 0]} />
-              <Bar dataKey="proceeds" stackId="cash" fill="#15803d" radius={[0, 0, 4, 4]} />
+              <Bar dataKey="spend" stackId="cash" fill="var(--color-danger)" radius={[4, 4, 0, 0]} />
+              <Bar dataKey="proceeds" stackId="cash" fill="var(--color-success)" radius={[0, 0, 4, 4]} />
             </BarChart>
           </ResponsiveContainer>
         </div>
@@ -627,9 +627,9 @@ function WatchFlowCard({ watches }: { watches: Watch[] }) {
 
   // Colors: bought = success green, sold = danger red, gifted (either
   // direction) = gifted purple — direction is conveyed by axis position.
-  const C_BOUGHT = '#15803d'
-  const C_SOLD = '#b91c1c'
-  const C_GIFT = '#7c3aed'
+  const C_BOUGHT = 'var(--color-success)'
+  const C_SOLD = 'var(--color-danger)'
+  const C_GIFT = 'var(--color-gifted)'
 
   return (
     <Card title="Watches in / out per year">
@@ -1526,16 +1526,16 @@ function TravelCompanionCard({
                 contentStyle={TOOLTIP_STYLE} labelStyle={TOOLTIP_LABEL_STYLE}
                 formatter={(v, name) => [v, name === 'home' ? 'Home' : 'Away']}
               />
-              <Bar dataKey="home" stackId="loc" fill="#2563eb" radius={[0, 0, 0, 0]}>
+              <Bar dataKey="home" stackId="loc" fill="var(--color-accent)" radius={[0, 0, 0, 0]}>
                 {rows.map((r) => (
                   <Cell key={`${r.id}-h`} fill={r.color} fillOpacity={r.inactive ? 0.5 : 1} />
                 ))}
               </Bar>
-              <Bar dataKey="away" stackId="loc" fill="#cbd5e1">
+              <Bar dataKey="away" stackId="loc" fill="var(--color-border-strong)">
                 {rows.map((r) => (
                   <Cell
                     key={`${r.id}-a`}
-                    fill="#cbd5e1"
+                    fill="var(--color-border-strong)"
                     fillOpacity={r.inactive ? 0.5 : 1}
                   />
                 ))}
@@ -1550,8 +1550,8 @@ function TravelCompanionCard({
           Watch color = Home
         </span>
         <span className="inline-flex items-center gap-1">
-          <span className="inline-block w-2.5 h-2.5 rounded-sm bg-slate-300" />
-          Slate = Away
+          <span className="inline-block w-2.5 h-2.5 rounded-sm bg-border-strong" />
+          Neutral = Away
         </span>
       </div>
     </Card>
@@ -1664,7 +1664,7 @@ function TravelMapCard({ wearLog }: { wearLog: WearLogEntry[] }) {
                   key={i}
                   center={[p.lat, p.lng]}
                   radius={radius}
-                  pathOptions={{ color: '#2563eb', fillColor: '#2563eb', fillOpacity: 0.5, weight: 1 }}
+                  pathOptions={{ color: 'var(--color-accent)', fillColor: 'var(--color-accent)', fillOpacity: 0.5, weight: 1 }}
                 >
                   <LeafletTooltip>
                     <div className="text-xs">

@@ -376,7 +376,7 @@ function LogWearInner() {
           <button
             onClick={handleSave}
             disabled={busy || !watchId || done}
-            className="w-full px-3 py-2 text-sm rounded-md bg-accent text-white disabled:opacity-50"
+            className="w-full px-3 py-2 text-sm rounded-md bg-accent text-on-accent disabled:opacity-50"
           >
             {done
               ? 'Logged ✓'

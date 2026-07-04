@@ -27,8 +27,8 @@ export default defineConfig({
         short_name: 'Watches',
         description: 'Personal watch collection manager',
         // Warm theme (the app default): light bg + dark bg
-        theme_color: '#fdfbf6',
-        background_color: '#fdfbf6',
+        theme_color: '#f7f2e8',
+        background_color: '#f7f2e8',
         display: 'standalone',
         start_url: base,
         scope: base,

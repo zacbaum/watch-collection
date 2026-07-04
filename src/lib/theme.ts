@@ -1,23 +1,9 @@
-// Theme + dark-mode controller.
-//
-// Two orthogonal preferences:
-//   - theme: 'default' | 'slate' | 'warm' | 'mono' | 'forest'
-//   - mode:  'auto' | 'light' | 'dark'
-//
-// 'auto' tracks the OS preference via prefers-color-scheme.
-// Both preferences are stored in localStorage and applied as data-attributes
-// on <html> so CSS overrides can target them.
+// Light/dark mode controller. The app has ONE palette (Gilt Champagne,
+// defined in index.css); the only preference is mode:
+//   'auto' | 'light' | 'dark' — auto tracks prefers-color-scheme.
+// Stored in localStorage and applied as [data-dark="1"] on <html>.
 
-export type ThemeName = 'default' | 'slate' | 'warm' | 'mono' | 'forest'
 export type ModeName = 'auto' | 'light' | 'dark'
-
-export const THEMES: Array<{ key: ThemeName; label: string; swatch: string[] }> = [
-  { key: 'default', label: 'Default', swatch: ['#ffffff', '#1c1917', '#2563eb'] },
-  { key: 'slate', label: 'Slate', swatch: ['#f8fafc', '#0f172a', '#4f46e5'] },
-  { key: 'warm', label: 'Warm', swatch: ['#fdfbf6', '#292017', '#b45309'] },
-  { key: 'mono', label: 'Mono', swatch: ['#ffffff', '#111827', '#111827'] },
-  { key: 'forest', label: 'Forest', swatch: ['#f8faf7', '#1f2937', '#15803d'] },
-]
 
 export const MODES: Array<{ key: ModeName; label: string }> = [
   { key: 'auto', label: 'Auto (system)' },
@@ -25,27 +11,12 @@ export const MODES: Array<{ key: ModeName; label: string }> = [
   { key: 'dark', label: 'Dark' },
 ]
 
-const THEME_KEY = 'watch-collection.theme.v1'
 const MODE_KEY = 'watch-collection.mode.v1'
-
-export function getTheme(): ThemeName {
-  const v = localStorage.getItem(THEME_KEY)
-  if (THEMES.some((t) => t.key === v)) return v as ThemeName
-  // Default to "warm" for the editorial Lugs-inspired feel on fresh installs.
-  // Existing users keep whatever they've already picked.
-  return 'warm'
-}
 
 export function getMode(): ModeName {
   const v = localStorage.getItem(MODE_KEY)
   if (MODES.some((m) => m.key === v)) return v as ModeName
   return 'auto'
-}
-
-export function setTheme(t: ThemeName): void {
-  localStorage.setItem(THEME_KEY, t)
-  document.documentElement.dataset.theme = t
-  syncThemeColorMeta()
 }
 
 export function setMode(m: ModeName): void {
@@ -65,9 +36,9 @@ function applyMode(mode: ModeName): void {
 }
 
 /** Keep the browser-chrome / iOS-status-bar colour in step with the active
- *  theme. index.html ships static light/dark theme-color metas for first
+ *  mode. index.html ships static light/dark theme-color metas for first
  *  paint; this appends a dynamic one (last matching meta wins) that tracks
- *  the resolved --color-bg of whatever theme+mode combination is live. */
+ *  the resolved --color-bg. */
 function syncThemeColorMeta(): void {
   const bg = getComputedStyle(document.documentElement)
     .getPropertyValue('--color-bg')
@@ -85,7 +56,6 @@ function syncThemeColorMeta(): void {
 
 /** Call once at app boot to apply persisted prefs and start watching system. */
 export function bootTheme(): void {
-  document.documentElement.dataset.theme = getTheme()
   applyMode(getMode())
 
   // Re-apply when the OS preference changes (only if user is on 'auto')

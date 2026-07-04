@@ -125,7 +125,7 @@ function HomeInner() {
         action={
           <Link
             to="/collection"
-            className="inline-flex items-center px-3 py-1.5 text-xs rounded-md bg-accent text-white"
+            className="inline-flex items-center px-3 py-1.5 text-xs rounded-md bg-accent text-on-accent"
           >
             Open Collection
           </Link>
@@ -205,7 +205,7 @@ function HomeInner() {
         className={
           todayWatch
             ? 'flex items-center justify-between gap-3 rounded-lg border border-border bg-surface px-4 py-3 hover:border-border-strong transition'
-            : 'flex items-center justify-between gap-3 rounded-lg bg-accent text-white px-4 py-4 shadow-sm hover:opacity-95 transition'
+            : 'flex items-center justify-between gap-3 rounded-lg bg-accent text-on-accent px-4 py-4 shadow-sm hover:opacity-95 transition'
         }
       >
         {todayWatch ? (

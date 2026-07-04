@@ -65,7 +65,7 @@ function WishlistInner() {
         <h1 className="text-2xl font-display font-medium tracking-tight">Wishlist</h1>
         <button
           onClick={() => setAdding((a) => !a)}
-          className="px-3 py-1.5 text-xs rounded-md bg-accent text-white flex items-center gap-1"
+          className="px-3 py-1.5 text-xs rounded-md bg-accent text-on-accent flex items-center gap-1"
         >
           <Plus size={14} /> Add want
         </button>
@@ -273,7 +273,7 @@ function Form({
               onClick={() => setPriority(p as 1 | 2 | 3 | 4 | 5)}
               className={classNames(
                 'w-6 h-6 text-xs rounded-md border',
-                p <= priority ? 'bg-accent text-white border-accent' : 'border-border',
+                p <= priority ? 'bg-accent text-on-accent border-accent' : 'border-border',
               )}
             >
               {p}
@@ -362,7 +362,7 @@ function Form({
           <button
             type="submit"
             disabled={busy || !brand.trim() || !model.trim()}
-            className="px-3 py-1.5 text-xs rounded-md bg-accent text-white disabled:opacity-50"
+            className="px-3 py-1.5 text-xs rounded-md bg-accent text-on-accent disabled:opacity-50"
           >
             {busy ? 'Saving…' : 'Save'}
           </button>

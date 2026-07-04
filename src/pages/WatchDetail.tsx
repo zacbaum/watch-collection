@@ -240,7 +240,7 @@ function WatchDetailInner() {
             <button
               onClick={handleWearToday}
               disabled={wearingBusy}
-              className="px-3 py-1.5 text-xs rounded-md bg-accent text-white disabled:opacity-50 inline-flex items-center gap-1"
+              className="px-3 py-1.5 text-xs rounded-md bg-accent text-on-accent disabled:opacity-50 inline-flex items-center gap-1"
             >
               {wearingBusy ? (
                 <RefreshCw size={12} className="animate-spin" />
@@ -677,7 +677,7 @@ function ServiceSection({
               type="button"
               onClick={() => void handleAdd()}
               disabled={busy}
-              className="px-3 py-1.5 text-xs rounded-md bg-accent text-white disabled:opacity-50"
+              className="px-3 py-1.5 text-xs rounded-md bg-accent text-on-accent disabled:opacity-50"
             >
               {busy ? 'Saving…' : 'Save service'}
             </button>
@@ -1182,7 +1182,7 @@ function EditForm({ watch, onClose }: { watch: Watch; onClose: () => void }) {
         <button
           onClick={handleSave}
           disabled={busy}
-          className="px-3 py-1.5 text-xs rounded-md bg-accent text-white flex items-center gap-1 disabled:opacity-50"
+          className="px-3 py-1.5 text-xs rounded-md bg-accent text-on-accent flex items-center gap-1 disabled:opacity-50"
         >
           <Save size={12} /> {busy ? 'Saving…' : 'Save'}
         </button>
