@@ -16,6 +16,7 @@ import {
 // CalendarDays still used by the mobile "Log" footer button below
 import { useDataContext } from '../hooks/useData'
 import { classNames } from '../lib/utils'
+import { ErrorBoundary } from './ErrorBoundary'
 
 interface LayoutProps {
   children: ReactNode
@@ -81,13 +82,15 @@ export function Layout({ children }: LayoutProps) {
         </div>
       </header>
 
-      <main className="flex-1 max-w-6xl w-full mx-auto px-4 pt-4 pb-24 sm:pb-8">
+      {/* Bottom padding leaves room for the fixed nav + the iPhone home
+          indicator (safe-area inset — nonzero only in standalone mode). */}
+      <main className="flex-1 max-w-6xl w-full mx-auto px-4 pt-4 pb-[calc(6rem+env(safe-area-inset-bottom))] sm:pb-8">
         <div key={location.pathname} className="page-transition">
-          {children}
+          <ErrorBoundary>{children}</ErrorBoundary>
         </div>
       </main>
 
-      <nav className="sm:hidden fixed bottom-0 left-0 right-0 border-t border-border bg-surface/70 backdrop-blur-md z-30 flex justify-around items-center h-14">
+      <nav className="sm:hidden fixed bottom-0 left-0 right-0 border-t border-border bg-surface/70 backdrop-blur-md z-30 flex justify-around items-center h-14 box-content pb-[env(safe-area-inset-bottom)]">
         {NAV.filter((n) => n.mobile).map((n) => (
           <NavLink
             key={n.to}
