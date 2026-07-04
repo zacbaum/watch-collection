@@ -7,8 +7,7 @@ import { Photo } from '../components/Photo'
 import { useData, useDataContext } from '../hooks/useData'
 import type { Currency, WishlistItem } from '../types'
 import { formatMoney, todayIso, classNames, currencySymbols } from '../lib/utils'
-import { loadAuth } from '../lib/auth'
-import { uploadPhoto } from '../lib/storage'
+import { compressImage } from '../lib/image'
 import { Plus, Trash2, Heart, Pencil, ImagePlus, X } from 'lucide-react'
 import { computeInsights } from '../lib/insights'
 
@@ -215,23 +214,19 @@ function Form({
   const [photoBusy, setPhotoBusy] = useState(false)
   const [photoError, setPhotoError] = useState<string | null>(null)
   const fileRef = useRef<HTMLInputElement | null>(null)
+  const { backupPhoto } = useDataContext()
 
   async function handlePhotoSelect(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
     e.target.value = ''
     if (!file) return
-    const cfg = loadAuth()
-    if (!cfg) {
-      setPhotoError('Not authenticated.')
-      return
-    }
     setPhotoBusy(true)
     setPhotoError(null)
     try {
-      const ext = file.name.split('.').pop()?.toLowerCase() ?? 'jpg'
+      const blob = await compressImage(file)
       const idSlug = initial?.id ?? 'wishlist'
-      const filename = `${idSlug}-${nanoid(6)}.${ext}`
-      const path = await uploadPhoto(cfg, filename, file)
+      const path = `photos/${idSlug}-${nanoid(6)}.jpg`
+      await backupPhoto(path, blob)
       setImageUrl(path)
     } catch (err) {
       setPhotoError((err as Error).message)

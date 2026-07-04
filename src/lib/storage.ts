@@ -1,5 +1,8 @@
+// GitHub backup adapter. IndexedDB (lib/db.ts) is the source of truth; this
+// module pushes/pulls the same document + photo blobs to a private repo so
+// every change gets a git commit (history/traceability) and any device can
+// restore.
 import type { AppData, AuthConfig } from '../types'
-import { EMPTY_DATA } from '../types'
 
 const DATA_PATH = 'data.json'
 
@@ -81,28 +84,28 @@ async function putFile(
 
 let cachedSha: string | undefined
 
-export async function loadData(cfg: AuthConfig): Promise<AppData> {
+/** Pull the backup document. Returns null when the repo has no data.json —
+ *  callers must NOT treat that as "empty data with a fresh timestamp" or an
+ *  empty remote would win reconciliation against real local data. */
+export async function loadData(cfg: AuthConfig): Promise<AppData | null> {
   const file = await getFile(cfg, DATA_PATH)
   if (!file) {
     cachedSha = undefined
-    return { ...EMPTY_DATA }
+    return null
   }
   cachedSha = file.sha
   try {
     const parsed = JSON.parse(file.content) as AppData
-    return {
-      ...EMPTY_DATA,
-      ...parsed,
-      schemaVersion: parsed.schemaVersion ?? 1,
-    }
+    return { ...parsed, schemaVersion: parsed.schemaVersion ?? 1 }
   } catch (e) {
     throw new Error(`Failed to parse data.json: ${(e as Error).message}`)
   }
 }
 
+/** Push the document as-is (updatedAt is stamped by the local write, not
+ *  here — keeps local and remote timestamps identical after a push). */
 export async function saveData(cfg: AuthConfig, data: AppData, message = 'Update data'): Promise<void> {
-  const next: AppData = { ...data, updatedAt: new Date().toISOString() }
-  const json = JSON.stringify(next, null, 2)
+  const json = JSON.stringify(data, null, 2)
   try {
     const result = await putFile(cfg, DATA_PATH, json, message, cachedSha)
     cachedSha = result.sha
@@ -119,13 +122,12 @@ export async function saveData(cfg: AuthConfig, data: AppData, message = 'Update
   }
 }
 
-/** Upload a binary photo (Blob) to data repo at photos/{filename}. Returns the path. */
+/** Upload a photo blob to the repo at the given path (e.g. photos/w_x-y.jpg). */
 export async function uploadPhoto(
   cfg: AuthConfig,
-  filename: string,
+  path: string,
   blob: Blob,
-): Promise<string> {
-  const path = `photos/${filename}`
+): Promise<void> {
   const buf = new Uint8Array(await blob.arrayBuffer())
   let binary = ''
   for (const b of buf) binary += String.fromCharCode(b)
@@ -138,7 +140,7 @@ export async function uploadPhoto(
       method: 'PUT',
       headers: { ...authHeaders(cfg), 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        message: `Upload photo ${filename}`,
+        message: `Upload photo ${path}`,
         content: b64,
         sha: existing?.sha,
         branch: cfg.branch,
@@ -149,11 +151,15 @@ export async function uploadPhoto(
     const text = await res.text().catch(() => '')
     throw new Error(`Photo upload failed ${res.status}: ${text}`)
   }
-  return path
 }
 
-/** Fetch a photo from the private repo as a blob URL (authed). */
-export async function fetchPhoto(cfg: AuthConfig, path: string): Promise<string> {
+/** True if the repo already has a file at this path. */
+export async function hasRemoteFile(cfg: AuthConfig, path: string): Promise<boolean> {
+  return (await getFile(cfg, path).catch(() => null)) != null
+}
+
+/** Fetch a photo from the private repo as a Blob (authed). */
+export async function fetchPhoto(cfg: AuthConfig, path: string): Promise<Blob> {
   const res = await fetch(
     `https://api.github.com/repos/${cfg.username}/${cfg.dataRepo}/contents/${path}?ref=${cfg.branch}`,
     {
@@ -161,6 +167,5 @@ export async function fetchPhoto(cfg: AuthConfig, path: string): Promise<string>
     },
   )
   if (!res.ok) throw new Error(`Photo fetch failed ${res.status}`)
-  const blob = await res.blob()
-  return URL.createObjectURL(blob)
+  return res.blob()
 }

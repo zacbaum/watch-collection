@@ -27,8 +27,8 @@ import {
   todayIso,
 } from '../lib/utils'
 import { toGbp } from '../lib/fx'
-import { loadAuth } from '../lib/auth'
-import { uploadPhoto } from '../lib/storage'
+import { compressImage } from '../lib/image'
+import { dbDeletePhoto } from '../lib/db'
 import { getCurrentPosition, reverseGeocode } from '../lib/geocode'
 import { findNearestKnownCity } from '../lib/cityCoords'
 import {
@@ -160,8 +160,10 @@ function WatchDetailInner() {
 
   async function handleDelete() {
     if (!watch) return
-    if (!confirm('Delete this watch and all its wear entries? This cannot be undone outside git history.'))
+    if (!confirm('Delete this watch and all its wear entries? This cannot be undone outside backup history.'))
       return
+    // Drop local photo blobs too (the backup repo keeps its copies in history).
+    for (const p of watch.photos ?? []) void dbDeletePhoto(p)
     await mutate(
       (d) => ({
         ...d,
@@ -509,7 +511,7 @@ function MetadataView({ watch }: { watch: Watch }) {
 }
 
 function EditForm({ watch, onClose }: { watch: Watch; onClose: () => void }) {
-  const { mutate } = useDataContext()
+  const { mutate, backupPhoto } = useDataContext()
   const [w, setW] = useState<Watch>({ ...watch })
   const [busy, setBusy] = useState(false)
   const [photoBusy, setPhotoBusy] = useState(false)
@@ -524,17 +526,12 @@ function EditForm({ watch, onClose }: { watch: Watch; onClose: () => void }) {
     const file = e.target.files?.[0]
     e.target.value = '' // reset so same file can be re-picked
     if (!file) return
-    const cfg = loadAuth()
-    if (!cfg) {
-      setPhotoError('Not authenticated.')
-      return
-    }
     setPhotoBusy(true)
     setPhotoError(null)
     try {
-      const ext = file.name.split('.').pop()?.toLowerCase() ?? 'jpg'
-      const filename = `${watch.id}-${nanoid(6)}.${ext}`
-      const path = await uploadPhoto(cfg, filename, file)
+      const blob = await compressImage(file)
+      const path = `photos/${watch.id}-${nanoid(6)}.jpg`
+      await backupPhoto(path, blob) // stores locally; pushes to backup if configured
       setW((prev) => ({ ...prev, photos: [...(prev.photos ?? []), path] }))
     } catch (err) {
       setPhotoError((err as Error).message)

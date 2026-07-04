@@ -9,11 +9,18 @@ import {
   type ReactNode,
 } from 'react'
 import type { AppData, AuthConfig } from '../types'
+import { EMPTY_DATA } from '../types'
 import { loadAuth } from '../lib/auth'
-import { loadData, saveData } from '../lib/storage'
+import { dbGetData, dbPutData, dbGetPhoto, dbPutPhoto, requestPersistence } from '../lib/db'
+import { loadData, saveData, uploadPhoto, hasRemoteFile } from '../lib/storage'
+
+// Local-first data layer. IndexedDB is the source of truth: boots and writes
+// never wait on the network. When a GitHub backup is configured, every local
+// change is pushed in the background (one git commit per change = full
+// history), and boot reconciles with the remote — newer updatedAt wins, which
+// covers occasional edits from another device.
 
 export type DataState =
-  | { kind: 'unconfigured' }
   | { kind: 'loading' }
   | { kind: 'ready'; data: AppData }
   | { kind: 'error'; error: string }
@@ -21,10 +28,10 @@ export type DataState =
 export interface DataContextValue {
   state: DataState
   auth: AuthConfig | null
+  /** True while a background backup push is in flight. */
   syncing: boolean
-  /** Message from the most recent failed save, or null. Cleared on the next
-   *  mutate. The in-memory state is still updated optimistically, so a
-   *  non-null value means local changes may not have reached the repo. */
+  /** Message from the most recent failed backup push, or null. The local
+   *  write always succeeded — non-null just means the repo copy is behind. */
   saveError: string | null
   reload: () => Promise<void>
   setAuth: (cfg: AuthConfig | null) => void
@@ -32,6 +39,10 @@ export interface DataContextValue {
     fn: (data: AppData) => AppData,
     options?: { message?: string },
   ) => Promise<void>
+  /** Store a photo locally and push it to the backup repo when configured. */
+  backupPhoto: (path: string, blob: Blob) => Promise<void>
+  /** Force-push the current local document to the backup repo. */
+  backupNow: () => Promise<void>
 }
 
 const DataContext = createContext<DataContextValue | null>(null)
@@ -48,85 +59,152 @@ export function useData(): AppData {
   return state.data
 }
 
-interface DataProviderProps {
-  children: ReactNode
+function freshEmpty(): AppData {
+  return { ...EMPTY_DATA, updatedAt: new Date().toISOString() }
 }
 
-export function DataProvider({ children }: DataProviderProps) {
+/** Collect every photo path referenced by the document. */
+function referencedPhotoPaths(data: AppData): string[] {
+  const out: string[] = []
+  for (const w of data.watches) for (const p of w.photos ?? []) out.push(p)
+  for (const wi of data.wishlist) {
+    if (wi.imageUrl && !/^(https?:|data:)/i.test(wi.imageUrl)) out.push(wi.imageUrl)
+  }
+  return out
+}
+
+export function DataProvider({ children }: { children: ReactNode }) {
   const [auth, setAuthState] = useState<AuthConfig | null>(() => loadAuth())
-  const [state, setState] = useState<DataState>(() =>
-    loadAuth() ? { kind: 'loading' } : { kind: 'unconfigured' },
-  )
+  const [state, setState] = useState<DataState>({ kind: 'loading' })
   const [syncing, setSyncing] = useState(false)
   const [saveError, setSaveError] = useState<string | null>(null)
   const writeQueue = useRef<Promise<void>>(Promise.resolve())
+  // Latest local doc for background jobs that outlive a render.
+  const latest = useRef<AppData | null>(null)
 
-  const reload = useCallback(async () => {
-    const cfg = loadAuth()
-    if (!cfg) {
-      setState({ kind: 'unconfigured' })
-      return
-    }
-    setState({ kind: 'loading' })
+  const setReady = useCallback((data: AppData) => {
+    latest.current = data
+    setState({ kind: 'ready', data })
+  }, [])
+
+  /** Push the given doc to the backup repo through the serialized queue. */
+  const queuePush = useCallback((cfg: AuthConfig, data: AppData, message: string) => {
+    setSyncing(true)
+    setSaveError(null)
+    // Failures are recorded, not rethrown — the queue must always resolve or
+    // one failure would silently drop every subsequent push.
+    const job = writeQueue.current.then(async () => {
+      try {
+        await saveData(cfg, data, message)
+      } catch (e) {
+        setSaveError((e as Error).message)
+      } finally {
+        setSyncing(false)
+      }
+    })
+    writeQueue.current = job
+    return job
+  }, [])
+
+  /** Compare local vs remote; newer updatedAt wins. Also backfills any local
+   *  photos the repo is missing (e.g. photos added before backup was set up). */
+  const reconcile = useCallback(
+    async (cfg: AuthConfig, local: AppData) => {
+      try {
+        const remote = await loadData(cfg)
+        let current = local
+        if (!remote || remote.updatedAt < local.updatedAt) {
+          await saveData(cfg, local, 'Sync: push local changes')
+        } else if (remote.updatedAt > local.updatedAt) {
+          await dbPutData(remote)
+          setReady(remote)
+          current = remote
+        }
+        // Backfill photo blobs the repo doesn't have yet (best-effort).
+        for (const path of referencedPhotoPaths(current)) {
+          const blob = await dbGetPhoto(path)
+          if (!blob) continue
+          if (!(await hasRemoteFile(cfg, path))) await uploadPhoto(cfg, path, blob)
+        }
+      } catch (e) {
+        setSaveError((e as Error).message)
+      }
+    },
+    [setReady],
+  )
+
+  const boot = useCallback(async () => {
+    requestPersistence()
     try {
-      const data = await loadData(cfg)
-      setState({ kind: 'ready', data })
+      let local = await dbGetData()
+      const cfg = loadAuth()
+      if (!local) {
+        if (cfg) {
+          // First run on this device with a backup configured: restore.
+          setState({ kind: 'loading' })
+          const remote = await loadData(cfg)
+          local = remote ?? freshEmpty()
+          // Photo blobs restore lazily as they're viewed (Photo component
+          // pulls from the repo and caches into IndexedDB).
+        } else {
+          local = freshEmpty()
+        }
+        await dbPutData(local)
+        setReady(local)
+        return
+      }
+      setReady(local)
+      if (cfg && navigator.onLine) void reconcile(cfg, local)
     } catch (e) {
       setState({ kind: 'error', error: (e as Error).message })
     }
-  }, [])
+  }, [reconcile, setReady])
 
   useEffect(() => {
-    void reload()
-  }, [reload])
+    void boot()
+  }, [boot])
 
-  const setAuth = useCallback((cfg: AuthConfig | null) => {
-    setAuthState(cfg)
-    if (cfg) {
-      setState({ kind: 'loading' })
-      void (async () => {
-        try {
-          const data = await loadData(cfg)
-          setState({ kind: 'ready', data })
-        } catch (e) {
-          setState({ kind: 'error', error: (e as Error).message })
-        }
-      })()
-    } else {
-      setState({ kind: 'unconfigured' })
-    }
-  }, [])
+  const setAuth = useCallback(
+    (cfg: AuthConfig | null) => {
+      setAuthState(cfg)
+      setSaveError(null)
+      if (cfg && latest.current) void reconcile(cfg, latest.current)
+    },
+    [reconcile],
+  )
 
   const mutate = useCallback<DataContextValue['mutate']>(
     async (fn, options) => {
-      const cfg = loadAuth()
-      if (!cfg) throw new Error('Not authenticated')
       if (state.kind !== 'ready') throw new Error('Data not ready')
-      const next = fn(state.data)
-      setState({ kind: 'ready', data: next })
-      setSyncing(true)
-      setSaveError(null)
-      // Failures are recorded in saveError rather than rethrown: the queue
-      // must always resolve, otherwise one failed save leaves .then() on a
-      // rejected promise and every subsequent write silently never runs.
-      const job = writeQueue.current.then(async () => {
-        try {
-          await saveData(cfg, next, options?.message ?? 'Update data')
-        } catch (e) {
-          setSaveError((e as Error).message)
-        } finally {
-          setSyncing(false)
-        }
-      })
-      writeQueue.current = job
-      return job
+      const next: AppData = { ...fn(state.data), updatedAt: new Date().toISOString() }
+      setReady(next)
+      await dbPutData(next) // local durability is the only thing callers wait on
+      const cfg = loadAuth()
+      if (cfg) void queuePush(cfg, next, options?.message ?? 'Update data')
     },
-    [state],
+    [state, setReady, queuePush],
   )
 
+  const backupPhoto = useCallback<DataContextValue['backupPhoto']>(async (path, blob) => {
+    await dbPutPhoto(path, blob)
+    const cfg = loadAuth()
+    if (!cfg) return
+    try {
+      await uploadPhoto(cfg, path, blob)
+    } catch (e) {
+      setSaveError((e as Error).message)
+    }
+  }, [])
+
+  const backupNow = useCallback(async () => {
+    const cfg = loadAuth()
+    if (!cfg || !latest.current) return
+    await queuePush(cfg, latest.current, 'Manual backup')
+  }, [queuePush])
+
   const value = useMemo<DataContextValue>(
-    () => ({ state, auth, syncing, saveError, reload, setAuth, mutate }),
-    [state, auth, syncing, saveError, reload, setAuth, mutate],
+    () => ({ state, auth, syncing, saveError, reload: boot, setAuth, mutate, backupPhoto, backupNow }),
+    [state, auth, syncing, saveError, boot, setAuth, mutate, backupPhoto, backupNow],
   )
 
   return <DataContext.Provider value={value}>{children}</DataContext.Provider>

@@ -11,6 +11,7 @@ import {
   Cloud,
   CloudOff,
   Flame,
+  HardDrive,
 } from 'lucide-react'
 // CalendarDays still used by the mobile "Log" footer button below
 import { useDataContext } from '../hooks/useData'
@@ -29,7 +30,7 @@ const NAV = [
 ]
 
 export function Layout({ children }: LayoutProps) {
-  const { state, syncing, saveError } = useDataContext()
+  const { state, auth, syncing, saveError } = useDataContext()
   const location = useLocation()
 
   return (
@@ -61,7 +62,12 @@ export function Layout({ children }: LayoutProps) {
           </nav>
           <div className="flex-1" />
           <StreakIndicator state={state} />
-          <SyncIndicator state={state} syncing={syncing} saveError={saveError} />
+          <SyncIndicator
+            state={state}
+            hasBackup={!!auth}
+            syncing={syncing}
+            saveError={saveError}
+          />
           <NavLink
             to="/log"
             className={classNames(
@@ -156,32 +162,15 @@ function StreakIndicator({ state }: { state: ReturnType<typeof useDataContext>['
 
 function SyncIndicator({
   state,
+  hasBackup,
   syncing,
   saveError,
 }: {
   state: ReturnType<typeof useDataContext>['state']
+  hasBackup: boolean
   syncing: boolean
   saveError: string | null
 }) {
-  if (state.kind === 'ready' && !syncing && saveError) {
-    return (
-      <span
-        className="text-xs text-danger flex items-center gap-1"
-        title={`${saveError} — your latest change may not be saved. It will retry on your next edit, or reload to discard.`}
-      >
-        <CloudOff size={14} />
-        Save failed
-      </span>
-    )
-  }
-  if (state.kind === 'unconfigured') {
-    return (
-      <span className="text-xs text-text-muted flex items-center gap-1">
-        <CloudOff size={14} />
-        Not connected
-      </span>
-    )
-  }
   if (state.kind === 'error') {
     return (
       <span className="text-xs text-danger flex items-center gap-1" title={state.error}>
@@ -198,10 +187,34 @@ function SyncIndicator({
       </span>
     )
   }
+  // Data is local-first: a save never fails. These states describe the
+  // background GitHub backup only.
+  if (!hasBackup) {
+    return (
+      <span
+        className="text-xs text-text-muted flex items-center gap-1"
+        title="Data lives on this device only. Set up backup in Settings."
+      >
+        <HardDrive size={14} />
+        On-device
+      </span>
+    )
+  }
+  if (!syncing && saveError) {
+    return (
+      <span
+        className="text-xs text-danger flex items-center gap-1"
+        title={`${saveError} — your data is saved on-device but the backup repo is behind. It will retry on your next change.`}
+      >
+        <CloudOff size={14} />
+        Backup failed
+      </span>
+    )
+  }
   return (
     <span className="text-xs text-text-muted flex items-center gap-1">
       <Cloud size={14} />
-      {syncing ? 'Saving…' : 'Synced'}
+      {syncing ? 'Backing up…' : 'Backed up'}
     </span>
   )
 }
