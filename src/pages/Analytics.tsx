@@ -1303,6 +1303,7 @@ function SellabilityCard({
 }) {
   const [showSold, setShowSold] = useState(false)
   const [sortMode, setSortMode] = useState<'score' | 'value'>('score')
+  const [expandedId, setExpandedId] = useState<string | null>(null)
   const ranking = useMemo(
     () => sellabilityRanking(watches, wearLog, { includeSold: showSold }),
     [watches, wearLog, showSold],
@@ -1410,7 +1411,7 @@ function SellabilityCard({
         90 days = max signal), and fair-share under-rotation (30%, averaged
         across 90/180/365-day windows so a single busy month can't hide
         consistent under-use). Pure wear-pattern derived — no price input.
-        Hover any row for the per-component breakdown. Gifted watches faded.
+        Tap any row for the per-component breakdown. Gifted watches faded.
         Fair-share divisor counts every watch in rotation during the window
         equally, regardless of how long it was owned — so a sold watch's
         365d snapshot over-states its under-share if it was only owned for
@@ -1460,109 +1461,106 @@ function SellabilityCard({
             },
           ]
           const valueGbp = w.status === 'owned' ? (w.currentValueGbp ?? 0) : 0
+          const expanded = expandedId === r.watchId
           return (
             <li
               key={r.watchId}
               className={classNames(
-                'group relative px-3 sm:px-4 py-2 grid grid-cols-[1fr_auto] gap-3 items-center hover:bg-surface-2/40 transition-colors',
+                'px-3 sm:px-4 py-2 cursor-pointer hover:bg-surface-2/40 transition-colors',
                 w.wasGift && 'opacity-65',
               )}
+              onClick={() => setExpandedId(expanded ? null : r.watchId)}
             >
-              <div className="min-w-0">
-                <div className="flex items-center gap-2 min-w-0">
-                  <span
-                    className="inline-block w-2.5 h-2.5 rounded-sm shrink-0"
-                    style={{ backgroundColor: color }}
-                  />
-                  <span className="text-sm text-text truncate">
-                    {w.brand}{' '}
-                    <span className="text-text-muted">{w.model}</span>
-                  </span>
-                  {w.wasGift && (
-                    <span className="text-[10px] uppercase tracking-wide text-text-subtle border border-border rounded px-1 py-px shrink-0">
-                      gift
+              {/* Two-line layout on phones, single row on sm+ */}
+              <div className="flex flex-col sm:flex-row sm:items-center gap-1.5 sm:gap-3">
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <span
+                      className="inline-block w-2.5 h-2.5 rounded-sm shrink-0"
+                      style={{ backgroundColor: color }}
+                    />
+                    <span className="text-sm text-text truncate">
+                      {w.brand}{' '}
+                      <span className="text-text-muted">{w.model}</span>
                     </span>
-                  )}
-                  {r.atSaleDate && (
-                    <span className="text-[10px] uppercase tracking-wide text-text-subtle border border-border rounded px-1 py-px shrink-0">
-                      at sale
-                    </span>
-                  )}
-                </div>
-                <div className="text-[11px] text-text-muted mt-0.5 truncate">
-                  {r.rationale} · {r.wearsTotal} total wear{r.wearsTotal === 1 ? '' : 's'}
-                  {r.wearsLast365 !== r.wearsTotal && (
-                    <> · {r.wearsLast365} in last 365d</>
-                  )}
-                </div>
-              </div>
-              <div className="flex items-center gap-3 shrink-0">
-                {valueGbp > 0 && (
-                  <div className="text-right">
-                    <div className="text-[11px] text-text-muted tabular-nums">
-                      {formatGbp(valueGbp)}
-                    </div>
-                    {sortMode === 'value' && (
-                      <div className="text-[10px] text-text-subtle tabular-nums">
-                        {formatGbp(Math.round((r.score / 100) * valueGbp))} at risk
-                      </div>
+                    {w.wasGift && (
+                      <span className="text-[10px] uppercase tracking-wide text-text-subtle border border-border rounded px-1 py-px shrink-0">
+                        gift
+                      </span>
+                    )}
+                    {r.atSaleDate && (
+                      <span className="text-[10px] uppercase tracking-wide text-text-subtle border border-border rounded px-1 py-px shrink-0">
+                        at sale
+                      </span>
                     )}
                   </div>
-                )}
-                <Sparkline history={historyByWatch.get(r.watchId) ?? []} />
-                <TrendArrow history={historyByWatch.get(r.watchId) ?? []} />
-                <div className="flex items-center gap-2">
-                  <div className="w-24 h-1.5 rounded-full bg-surface-2 overflow-hidden">
+                  <div className="text-[11px] text-text-muted mt-0.5 truncate">
+                    {r.rationale} · {r.wearsTotal} total wear{r.wearsTotal === 1 ? '' : 's'}
+                    {r.wearsLast365 !== r.wearsTotal && (
+                      <> · {r.wearsLast365} in last 365d</>
+                    )}
+                  </div>
+                </div>
+                <div className="flex items-center justify-between sm:justify-end gap-3 shrink-0">
+                  {valueGbp > 0 && (
+                    <div className="text-right">
+                      <div className="text-[11px] text-text-muted tabular-nums">
+                        {formatGbp(valueGbp)}
+                      </div>
+                      {sortMode === 'value' && (
+                        <div className="text-[10px] text-text-subtle tabular-nums">
+                          {formatGbp(Math.round((r.score / 100) * valueGbp))} at risk
+                        </div>
+                      )}
+                    </div>
+                  )}
+                  <Sparkline history={historyByWatch.get(r.watchId) ?? []} />
+                  <TrendArrow history={historyByWatch.get(r.watchId) ?? []} />
+                  <div className="flex items-center gap-2">
+                    <div className="w-16 sm:w-24 h-1.5 rounded-full bg-surface-2 overflow-hidden">
+                      <div
+                        className="h-full rounded-full"
+                        style={{
+                          width: `${r.score}%`,
+                          backgroundColor: scoreColor(r.score),
+                        }}
+                      />
+                    </div>
                     <div
-                      className="h-full rounded-full"
-                      style={{
-                        width: `${r.score}%`,
-                        backgroundColor: scoreColor(r.score),
-                      }}
-                    />
-                  </div>
-                  <div
-                    className="text-sm font-semibold tabular-nums w-8 text-right"
-                    style={{ color: scoreColor(r.score) }}
-                  >
-                    {r.score}
+                      className="text-sm font-semibold tabular-nums w-8 text-right"
+                      style={{ color: scoreColor(r.score) }}
+                    >
+                      {r.score}
+                    </div>
                   </div>
                 </div>
               </div>
-              {/* Hover-only component breakdown. Anchored to row's right
-                  edge, sits above; on the first row the card edge will clip
-                  it slightly — acceptable trade-off vs measuring viewport. */}
-              <div
-                className="pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity absolute right-3 sm:right-4 bottom-full mb-1 z-20 w-72 bg-bg border border-border rounded-md shadow-md p-2.5 text-[11px]"
-                role="tooltip"
-              >
-                <div className="flex items-baseline justify-between mb-1.5">
-                  <span className="font-medium text-text">Score breakdown</span>
-                  <span className="text-text-subtle tabular-nums">
-                    {r.score}/100
-                  </span>
+              {/* Tap/click-to-expand breakdown — works on touch, unlike the
+                  old hover-only popover. */}
+              {expanded && (
+                <div className="mt-2 rounded-md border border-border bg-surface-2/40 p-2.5 text-[11px]">
+                  {r.atSaleDate && (
+                    <div className="text-[10px] text-text-subtle mb-1.5">
+                      as of sale date {r.asOf}
+                    </div>
+                  )}
+                  <ul className="space-y-1.5">
+                    {parts.map((p) => (
+                      <li key={p.key}>
+                        <div className="flex items-baseline justify-between">
+                          <span className="text-text">{p.label}</span>
+                          <span className="tabular-nums text-text-muted">
+                            {p.value}/{p.max}
+                          </span>
+                        </div>
+                        <div className="text-text-subtle text-[10px] leading-snug">
+                          {p.reason}
+                        </div>
+                      </li>
+                    ))}
+                  </ul>
                 </div>
-                {r.atSaleDate && (
-                  <div className="text-[10px] text-text-subtle mb-1.5">
-                    as of sale date {r.asOf}
-                  </div>
-                )}
-                <ul className="space-y-1.5">
-                  {parts.map((p) => (
-                    <li key={p.key}>
-                      <div className="flex items-baseline justify-between">
-                        <span className="text-text">{p.label}</span>
-                        <span className="tabular-nums text-text-muted">
-                          {p.value}/{p.max}
-                        </span>
-                      </div>
-                      <div className="text-text-subtle text-[10px] leading-snug">
-                        {p.reason}
-                      </div>
-                    </li>
-                  ))}
-                </ul>
-              </div>
+              )}
             </li>
           )
         })}
