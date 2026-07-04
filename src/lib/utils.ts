@@ -1,18 +1,8 @@
-import { format, parse, parseISO, differenceInDays, isValid } from 'date-fns'
+import { format, parseISO, differenceInDays } from 'date-fns'
 import type { Currency, Money } from '../types'
 
 export function todayIso(): string {
   return format(new Date(), 'yyyy-MM-dd')
-}
-
-export function nowIso(): string {
-  return new Date().toISOString()
-}
-
-export function parseDdmmyyyy(s: string): string | null {
-  const d = parse(s.trim(), 'dd/MM/yyyy', new Date())
-  if (!isValid(d)) return null
-  return format(d, 'yyyy-MM-dd')
 }
 
 export function formatDate(iso: string, fmt = 'd MMM yyyy'): string {
@@ -73,15 +63,6 @@ export function titleCase(value: string | undefined | null): string {
       return part.charAt(0).toUpperCase() + part.slice(1).toLowerCase()
     })
     .join(' ')
-}
-
-/** Fix common encoding issues from old exports (e.g. WÄnaka → Wānaka). */
-export function fixEncoding(s: string): string {
-  if (!s) return s
-  return s
-    .replace(/W[ÄA]?naka/gi, 'Wānaka')
-    .replace(/�/g, '')
-    .trim()
 }
 
 /** Pretty location string: "City, Country" or whatever subset is present. */

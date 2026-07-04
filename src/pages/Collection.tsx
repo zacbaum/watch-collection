@@ -159,11 +159,7 @@ function CollectionInner() {
       {filtered.length === 0 ? (
         <Empty
           title="No watches in this view"
-          body={
-            status === 'owned'
-              ? 'Import your CSV from Settings or add one above.'
-              : 'Nothing here yet.'
-          }
+          body={status === 'owned' ? 'Add your first watch above.' : 'Nothing here yet.'}
         />
       ) : (
         <>

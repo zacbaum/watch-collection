@@ -108,13 +108,13 @@ function HomeInner() {
     return (
       <Empty
         title="No watches yet"
-        body="Import your wear log CSV from Settings, or add your first watch."
+        body="Add your first watch from the Collection tab, or restore a backup in Settings."
         action={
           <Link
-            to="/settings"
+            to="/collection"
             className="inline-flex items-center px-3 py-1.5 text-xs rounded-md bg-accent text-white"
           >
-            Open Settings
+            Open Collection
           </Link>
         }
       />

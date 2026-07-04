@@ -1,10 +1,19 @@
-import { useMemo, useState, type FormEvent } from 'react'
+import { useMemo, useRef, useState, type FormEvent } from 'react'
 import { useDataContext } from '../hooks/useData'
 import { clearAuth, saveAuth, verifyAuth } from '../lib/auth'
-import { importFromCsv, mergeImport } from '../lib/importer'
-import type { AuthConfig, WearLogEntry } from '../types'
+import type { AppData, AuthConfig, WearLogEntry } from '../types'
 import { Card } from '../components/Card'
-import { CheckCircle2, AlertCircle, Upload, Trash2, LogOut } from 'lucide-react'
+import { dbGetPhoto, dbListPhotoPaths, dbPutPhoto } from '../lib/db'
+import {
+  CheckCircle2,
+  AlertCircle,
+  Trash2,
+  LogOut,
+  Download,
+  Upload,
+  CloudUpload,
+  History,
+} from 'lucide-react'
 import {
   THEMES,
   MODES,
@@ -18,7 +27,7 @@ import {
 import { classNames } from '../lib/utils'
 
 export function Settings() {
-  const { auth, setAuth, state, mutate } = useDataContext()
+  const { auth, setAuth, state, mutate, backupNow, syncing, reload } = useDataContext()
   const [form, setForm] = useState<AuthConfig>({
     username: auth?.username ?? 'zacbaum',
     dataRepo: auth?.dataRepo ?? 'watch-collection-data',
@@ -131,7 +140,32 @@ export function Settings() {
         </div>
       </Card>
 
-      <Card title="GitHub data repo connection">
+      <Card title="Backup & sync">
+        <div className="text-xs text-text-muted mb-3">
+          Your data lives on this device. Connecting a private GitHub repo
+          backs up every change as a git commit (full history) and lets any
+          other device restore or stay in sync — newer side wins.
+        </div>
+        {auth && (
+          <div className="mb-3 flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => void backupNow()}
+              disabled={syncing}
+              className="px-3 py-1.5 text-xs rounded-md border border-border flex items-center gap-1 disabled:opacity-50"
+            >
+              <CloudUpload size={12} /> {syncing ? 'Backing up…' : 'Back up now'}
+            </button>
+            <a
+              href={`https://github.com/${auth.username}/${auth.dataRepo}/commits/${auth.branch}`}
+              target="_blank"
+              rel="noreferrer"
+              className="px-3 py-1.5 text-xs rounded-md border border-border flex items-center gap-1 text-text"
+            >
+              <History size={12} /> View history
+            </a>
+          </div>
+        )}
         <form onSubmit={handleSave} className="space-y-3">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <Field
@@ -205,97 +239,215 @@ export function Settings() {
       </Card>
 
       {state.kind === 'ready' && (
-        <ImportSection
-          onImport={async (text) => {
-            const result = importFromCsv(text)
-            await mutate((d) => mergeImport(d, result), {
-              message: `Import ${result.summary.distinctWatches} watches, ${result.wearLog.length} wear entries`,
-            })
-            return result.summary
-          }}
-        />
+        <DataSection data={state.data} onReload={reload} onReset={handleReset} />
       )}
 
       {state.kind === 'ready' && (
-        <LocationMergeSection
-          wearLog={state.data.wearLog}
-          onMerge={async (entryIds, target) => {
-            const ids = new Set(entryIds)
-            await mutate(
-              (d) => ({
-                ...d,
-                wearLog: d.wearLog.map((e) => {
-                  if (!ids.has(e.id) || !e.location) return e
-                  return {
-                    ...e,
-                    location: {
-                      ...e.location,
-                      city: target.city || undefined,
-                      country: target.country || undefined,
-                    },
-                  }
-                }),
-              }),
-              {
-                message: `Merge ${entryIds.length} wear locations → ${target.city || target.country}`,
-              },
-            )
-          }}
-        />
-      )}
-
-      {state.kind === 'ready' && (
-        <Card title="Data">
-          <div className="text-xs text-text-muted mb-2">
-            {state.data.watches.length} watches · {state.data.wearLog.length} wear log entries ·{' '}
-            {state.data.wishlist.length} wishlist items
-          </div>
-          <div className="flex gap-2">
-            <button
-              onClick={() => {
-                const blob = new Blob([JSON.stringify(state.data, null, 2)], {
-                  type: 'application/json',
-                })
-                const url = URL.createObjectURL(blob)
-                const a = document.createElement('a')
-                a.href = url
-                a.download = `watch-collection-${new Date().toISOString().slice(0, 10)}.json`
-                a.click()
-                URL.revokeObjectURL(url)
-              }}
-              className="px-3 py-1.5 text-xs rounded-md border border-border"
-            >
-              Export JSON
-            </button>
-            <button
-              onClick={() => {
-                if (
-                  !confirm(
-                    'Replace ALL data with an empty dataset and commit? This cannot be undone (except via git history).',
-                  )
-                )
-                  return
-                void mutate(
-                  () => ({
-                    watches: [],
-                    wearLog: [],
-                    wishlist: [],
-                    serviceLog: [],
-                    valuations: [],
-                    schemaVersion: 1,
-                    updatedAt: new Date().toISOString(),
+        <details className="group">
+          <summary className="cursor-pointer select-none text-xs text-text-muted px-1 py-2">
+            Data maintenance (merge duplicate locations)
+          </summary>
+          <div className="mt-2">
+            <LocationMergeSection
+              wearLog={state.data.wearLog}
+              onMerge={async (entryIds, target) => {
+                const ids = new Set(entryIds)
+                await mutate(
+                  (d) => ({
+                    ...d,
+                    wearLog: d.wearLog.map((e) => {
+                      if (!ids.has(e.id) || !e.location) return e
+                      return {
+                        ...e,
+                        location: {
+                          ...e.location,
+                          city: target.city || undefined,
+                          country: target.country || undefined,
+                        },
+                      }
+                    }),
                   }),
-                  { message: 'Reset data' },
+                  {
+                    message: `Merge ${entryIds.length} wear locations → ${target.city || target.country}`,
+                  },
                 )
               }}
-              className="px-3 py-1.5 text-xs rounded-md border border-border text-danger flex items-center gap-1"
-            >
-              <Trash2 size={12} /> Reset
-            </button>
+            />
           </div>
-        </Card>
+        </details>
       )}
     </div>
+  )
+
+  function handleReset() {
+    if (
+      !confirm(
+        'Replace ALL data with an empty dataset? This clears this device and (if connected) commits the reset to the backup — recoverable only via git history.',
+      )
+    )
+      return
+    void mutate(
+      () => ({
+        watches: [],
+        wearLog: [],
+        wishlist: [],
+        serviceLog: [],
+        valuations: [],
+        schemaVersion: 1,
+        updatedAt: new Date().toISOString(),
+      }),
+      { message: 'Reset data' },
+    )
+  }
+}
+
+// ─── Data (backup file export/import, reset) ────────────────────────────────
+
+interface BackupFile {
+  app: 'watch-collection'
+  version: 1
+  data: AppData
+  /** path → base64 (no data: prefix) */
+  photos: Record<string, string>
+}
+
+async function blobToBase64(blob: Blob): Promise<string> {
+  const buf = new Uint8Array(await blob.arrayBuffer())
+  let binary = ''
+  for (const b of buf) binary += String.fromCharCode(b)
+  return btoa(binary)
+}
+
+function base64ToBlob(b64: string): Blob {
+  const binary = atob(b64)
+  const bytes = new Uint8Array(binary.length)
+  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i)
+  return new Blob([bytes], { type: 'image/jpeg' })
+}
+
+function DataSection({
+  data,
+  onReload,
+  onReset,
+}: {
+  data: AppData
+  onReload: () => Promise<void>
+  onReset: () => void
+}) {
+  const [busy, setBusy] = useState<'export' | 'import' | null>(null)
+  const [msg, setMsg] = useState<string | null>(null)
+  const fileRef = useRef<HTMLInputElement | null>(null)
+
+  async function handleExport() {
+    setBusy('export')
+    setMsg(null)
+    try {
+      const photos: Record<string, string> = {}
+      for (const path of await dbListPhotoPaths()) {
+        const blob = await dbGetPhoto(path)
+        if (blob) photos[path] = await blobToBase64(blob)
+      }
+      const payload: BackupFile = { app: 'watch-collection', version: 1, data, photos }
+      const name = `watch-collection-backup-${new Date().toISOString().slice(0, 10)}.json`
+      const file = new File([JSON.stringify(payload)], name, { type: 'application/json' })
+      // iOS share sheet → "Save to Files" reaches iCloud Drive. Fallback to a
+      // plain download elsewhere.
+      if (navigator.canShare?.({ files: [file] })) {
+        await navigator.share({ files: [file] }).catch(() => {
+          /* user cancelled the sheet */
+        })
+      } else {
+        const url = URL.createObjectURL(file)
+        const a = document.createElement('a')
+        a.href = url
+        a.download = name
+        a.click()
+        URL.revokeObjectURL(url)
+      }
+      setMsg(`Exported ${Object.keys(photos).length} photos + data.`)
+    } catch (e) {
+      setMsg(`Export failed: ${(e as Error).message}`)
+    } finally {
+      setBusy(null)
+    }
+  }
+
+  async function handleImport(file: File) {
+    setBusy('import')
+    setMsg(null)
+    try {
+      const parsed = JSON.parse(await file.text()) as BackupFile
+      if (parsed.app !== 'watch-collection' || !parsed.data) {
+        throw new Error('Not a watch-collection backup file.')
+      }
+      if (
+        !confirm(
+          `Replace everything on this device with the backup (${parsed.data.watches.length} watches, ${parsed.data.wearLog.length} wear entries)?`,
+        )
+      )
+        return
+      const { dbPutData } = await import('../lib/db')
+      await dbPutData(parsed.data)
+      for (const [path, b64] of Object.entries(parsed.photos ?? {})) {
+        await dbPutPhoto(path, base64ToBlob(b64))
+      }
+      await onReload()
+      setMsg('Backup restored.')
+    } catch (e) {
+      setMsg(`Import failed: ${(e as Error).message}`)
+    } finally {
+      setBusy(null)
+    }
+  }
+
+  return (
+    <Card title="Data">
+      <div className="text-xs text-text-muted mb-3">
+        {data.watches.length} watches · {data.wearLog.length} wear log entries ·{' '}
+        {data.wishlist.length} wishlist items — stored on this device.
+      </div>
+      <div className="flex flex-wrap gap-2">
+        <button
+          onClick={() => void handleExport()}
+          disabled={busy != null}
+          className="px-3 py-1.5 text-xs rounded-md border border-border flex items-center gap-1 disabled:opacity-50"
+        >
+          <Download size={12} />
+          {busy === 'export' ? 'Exporting…' : 'Export backup (incl. photos)'}
+        </button>
+        <button
+          onClick={() => fileRef.current?.click()}
+          disabled={busy != null}
+          className="px-3 py-1.5 text-xs rounded-md border border-border flex items-center gap-1 disabled:opacity-50"
+        >
+          <Upload size={12} />
+          {busy === 'import' ? 'Importing…' : 'Restore from backup file'}
+        </button>
+        <input
+          ref={fileRef}
+          type="file"
+          accept="application/json"
+          className="hidden"
+          onChange={(e) => {
+            const f = e.target.files?.[0]
+            e.target.value = ''
+            if (f) void handleImport(f)
+          }}
+        />
+        <button
+          onClick={onReset}
+          disabled={busy != null}
+          className="px-3 py-1.5 text-xs rounded-md border border-border text-danger flex items-center gap-1 disabled:opacity-50"
+        >
+          <Trash2 size={12} /> Reset
+        </button>
+      </div>
+      {msg && <div className="text-xs text-text-muted mt-2">{msg}</div>}
+      <div className="text-[11px] text-text-subtle mt-2">
+        On iPhone, Export opens the share sheet — "Save to Files" puts the
+        backup in iCloud Drive.
+      </div>
+    </Card>
   )
 }
 
@@ -519,101 +671,6 @@ function LocationMergeSection({
       {msg && (
         <div className="text-xs text-success mt-3 flex items-center gap-1">
           <CheckCircle2 size={14} /> {msg}
-        </div>
-      )}
-    </Card>
-  )
-}
-
-function ImportSection({
-  onImport,
-}: {
-  onImport: (
-    text: string,
-  ) => Promise<{
-    rowsParsed: number
-    rowsSkipped: number
-    distinctWatches: number
-    dateRange: { from: string; to: string } | null
-  }>
-}) {
-  const [text, setText] = useState('')
-  const [busy, setBusy] = useState(false)
-  const [result, setResult] = useState<{
-    rowsParsed: number
-    rowsSkipped: number
-    distinctWatches: number
-    dateRange: { from: string; to: string } | null
-  } | null>(null)
-  const [err, setErr] = useState<string | null>(null)
-
-  async function handleFile(f: File) {
-    const t = await f.text()
-    setText(t)
-  }
-
-  async function handleImport() {
-    setBusy(true)
-    setErr(null)
-    setResult(null)
-    try {
-      const r = await onImport(text)
-      setResult(r)
-      setText('')
-    } catch (e) {
-      setErr((e as Error).message)
-    } finally {
-      setBusy(false)
-    }
-  }
-
-  return (
-    <Card title="Import wear log CSV">
-      <div className="text-xs text-text-muted mb-3">
-        Paste tab- or comma-separated rows with columns:{' '}
-        <code className="px-1 bg-surface-2 rounded">Date, Weekday, Month, Brand, Model, City, Region, Country</code>.
-        Dates in DD/MM/YYYY. The importer infers your collection from distinct Brand+Model pairs and de-duplicates against existing entries.
-      </div>
-      <div className="flex items-center gap-2 mb-2">
-        <label className="px-3 py-1.5 text-xs rounded-md border border-border cursor-pointer inline-flex items-center gap-1">
-          <Upload size={12} /> Choose file
-          <input
-            type="file"
-            accept=".csv,.tsv,.txt"
-            className="hidden"
-            onChange={(e) => {
-              const f = e.target.files?.[0]
-              if (f) void handleFile(f)
-            }}
-          />
-        </label>
-        <button
-          onClick={handleImport}
-          disabled={busy || !text.trim()}
-          className="px-3 py-1.5 text-xs rounded-md bg-accent text-white disabled:opacity-50"
-        >
-          {busy ? 'Importing…' : 'Import'}
-        </button>
-      </div>
-      <textarea
-        value={text}
-        onChange={(e) => setText(e.target.value)}
-        rows={6}
-        placeholder="Paste sheet rows here…"
-        className="w-full font-mono text-xs px-2 py-1.5 border border-border rounded-md bg-bg"
-      />
-      {err && (
-        <div className="text-xs text-danger mt-2 flex items-center gap-1">
-          <AlertCircle size={14} /> {err}
-        </div>
-      )}
-      {result && (
-        <div className="text-xs text-success mt-2 flex items-center gap-1">
-          <CheckCircle2 size={14} />
-          Imported {result.rowsParsed} rows · {result.distinctWatches} watches
-          {result.dateRange &&
-            ` · ${result.dateRange.from} → ${result.dateRange.to}`}
-          {result.rowsSkipped > 0 && ` · ${result.rowsSkipped} skipped`}
         </div>
       )}
     </Card>

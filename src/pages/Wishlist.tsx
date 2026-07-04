@@ -8,8 +8,7 @@ import { useData, useDataContext } from '../hooks/useData'
 import type { Currency, WishlistItem } from '../types'
 import { formatMoney, todayIso, classNames, currencySymbols } from '../lib/utils'
 import { compressImage } from '../lib/image'
-import { Plus, Trash2, Heart, Pencil, ImagePlus, X } from 'lucide-react'
-import { computeInsights } from '../lib/insights'
+import { Plus, Trash2, Pencil, ImagePlus, X } from 'lucide-react'
 
 const CURRENCIES: Currency[] = ['GBP', 'USD', 'EUR', 'CHF', 'JPY']
 
@@ -26,8 +25,6 @@ function WishlistInner() {
   const { mutate } = useDataContext()
   const [adding, setAdding] = useState(false)
   const [editingId, setEditingId] = useState<string | null>(null)
-
-  const insights = computeInsights(data.watches)
 
   async function add(item: Omit<WishlistItem, 'id' | 'addedDate'>) {
     const wi: WishlistItem = {
@@ -75,22 +72,6 @@ function WishlistInner() {
       </div>
 
       {adding && <Form onCancel={() => setAdding(false)} onSubmit={add} />}
-
-      {insights.gaps.length > 0 && (
-        <Card title="Suggested by gap analysis">
-          <ul className="space-y-2 text-sm">
-            {insights.gaps.map((g, i) => (
-              <li key={i} className="flex items-start gap-2">
-                <Heart size={14} className="text-accent mt-0.5 shrink-0" />
-                <div>
-                  <div className="font-medium">{g.title}</div>
-                  <div className="text-xs text-text-muted">{g.detail}</div>
-                </div>
-              </li>
-            ))}
-          </ul>
-        </Card>
-      )}
 
       {sorted.length === 0 ? (
         <Empty title="No wants yet" body="Add watches you're hunting for and tag them with priority." />
