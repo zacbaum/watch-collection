@@ -379,15 +379,18 @@ function fairShareUnderWindow(
   if (inRotation.length < 2) return 0
 
   const rotationIds = new Set(inRotation.map((w) => w.id))
-  const inWindow = wearLog.filter(
-    (e) =>
-      rotationIds.has(e.watchId) &&
-      e.date <= asOfIso &&
-      parseISO(e.date).getTime() >= windowStartMs,
-  )
-  const totalWears = inWindow.length
+  // ISO yyyy-MM-dd compares lexicographically — no per-entry parseISO. This
+  // runs inside the per-week history loop, so parsing here costs millions of
+  // Date allocations per render on a multi-year log.
+  let totalWears = 0
+  let targetWears = 0
+  for (const e of wearLog) {
+    if (e.date > asOfIso || e.date < windowStartIso) continue
+    if (!rotationIds.has(e.watchId)) continue
+    totalWears++
+    if (e.watchId === target.id) targetWears++
+  }
   if (totalWears === 0) return 0
-  const targetWears = inWindow.filter((e) => e.watchId === target.id).length
   const expected = totalWears / inRotation.length
   if (expected === 0) return 0
   return Math.max(0, Math.min(1, 1 - targetWears / expected))
@@ -419,9 +422,13 @@ export function sellabilityForWatch(
   const daysOwned =
     acqDate ? Math.max(1, differenceInDays(parseISO(todayIso), parseISO(acqDate))) : null
 
-  // Last-365-days wear count (relative to as-of, not today)
-  const cutoffMs = parseISO(todayIso).getTime() - 365 * 86_400_000
-  const wearsLast365 = wears.filter((d) => parseISO(d).getTime() >= cutoffMs).length
+  // Last-365-days wear count (relative to as-of, not today). String compare —
+  // ISO dates order lexicographically, and this runs per history snapshot.
+  const cutoffIso = format(
+    new Date(parseISO(todayIso).getTime() - 365 * 86_400_000),
+    'yyyy-MM-dd',
+  )
+  const wearsLast365 = wears.filter((d) => d >= cutoffIso).length
 
   // ─ Component 1: dormancy ─────────────────────────────────────
   // sqrt(d/90) — saturates at 3 months idle:
