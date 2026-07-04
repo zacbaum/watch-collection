@@ -10,12 +10,15 @@ import type {
   Currency,
   Location,
   Money,
+  ServiceLogEntry,
+  ServiceType,
   Watch,
   WatchCategory,
   WatchStatus,
   WearLogEntry,
   Movement,
 } from '../types'
+import { serviceDue } from '../lib/service'
 import {
   daysSince,
   formatDate,
@@ -39,6 +42,8 @@ import {
   X,
   CalendarCheck,
   RefreshCw,
+  Wrench,
+  Plus,
 } from 'lucide-react'
 import { differenceInDays, parseISO } from 'date-fns'
 
@@ -275,6 +280,8 @@ function WatchDetailInner() {
 
       <WearInsights wears={wears} />
 
+      <ServiceSection watch={watch} serviceLog={data.serviceLog} />
+
       <Card title={`Wear log (${wears.length})`}>
         {wears.length === 0 ? (
           <div className="text-xs text-text-muted">No wears yet.</div>
@@ -415,6 +422,211 @@ function InsightTile({
       <div className="text-base font-semibold mt-0.5 tabular-nums">{value}</div>
       {sub && <div className="text-[10px] text-text-muted mt-0.5">{sub}</div>}
     </div>
+  )
+}
+
+const SERVICE_TYPES: ServiceType[] = [
+  'full-service',
+  'battery',
+  'regulation',
+  'gasket',
+  'polish',
+  'repair',
+  'other',
+]
+
+function ServiceSection({
+  watch,
+  serviceLog,
+}: {
+  watch: Watch
+  serviceLog: ServiceLogEntry[]
+}) {
+  const { mutate } = useDataContext()
+  const entries = useMemo(
+    () =>
+      serviceLog
+        .filter((e) => e.watchId === watch.id)
+        .sort((a, b) => b.date.localeCompare(a.date)),
+    [serviceLog, watch.id],
+  )
+  const due = serviceDue(watch, serviceLog)
+  const [adding, setAdding] = useState(false)
+  const [date, setDate] = useState(todayIso())
+  const [type, setType] = useState<ServiceType>('full-service')
+  const [watchmaker, setWatchmaker] = useState('')
+  const [cost, setCost] = useState<Money | undefined>(undefined)
+  const [notes, setNotes] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [err, setErr] = useState<string | null>(null)
+
+  async function handleAdd() {
+    setBusy(true)
+    setErr(null)
+    try {
+      let costGbp: number | undefined
+      if (cost && cost.amount > 0) costGbp = await toGbp(cost, date)
+      const entry: ServiceLogEntry = {
+        id: nanoid(8),
+        watchId: watch.id,
+        date,
+        type,
+        watchmaker: watchmaker.trim() || undefined,
+        cost: cost && cost.amount > 0 ? cost : undefined,
+        costGbp,
+        notes: notes.trim() || undefined,
+      }
+      await mutate((d) => ({ ...d, serviceLog: [...d.serviceLog, entry] }), {
+        message: `Log ${type} for ${watch.brand} ${watch.model}`,
+      })
+      setAdding(false)
+      setDate(todayIso())
+      setType('full-service')
+      setWatchmaker('')
+      setCost(undefined)
+      setNotes('')
+    } catch (e) {
+      setErr((e as Error).message)
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  async function handleDelete(id: string) {
+    await mutate((d) => ({ ...d, serviceLog: d.serviceLog.filter((e) => e.id !== id) }), {
+      message: 'Delete service entry',
+    })
+  }
+
+  // Due status: alarm only on derivable dates (never guess for vintage
+  // pieces with no recorded history).
+  let dueLine: React.ReactNode = null
+  if (due.dueDate != null && due.daysUntil != null) {
+    dueLine =
+      due.daysUntil < 0 ? (
+        <span className="text-danger">
+          Service overdue — was due {formatDate(due.dueDate)}
+        </span>
+      ) : due.daysUntil <= 90 ? (
+        <span className="text-warning">
+          Service due in {due.daysUntil} day{due.daysUntil === 1 ? '' : 's'} (
+          {formatDate(due.dueDate)})
+        </span>
+      ) : (
+        <span className="text-text-muted">Next service due {formatDate(due.dueDate)}</span>
+      )
+  } else if (watch.serviceIntervalMonths && !due.lastFullService) {
+    dueLine = (
+      <span className="text-text-subtle">
+        No full service recorded yet — log one to start the {watch.serviceIntervalMonths}
+        -month countdown.
+      </span>
+    )
+  }
+
+  return (
+    <Card
+      title={`Service${entries.length > 0 ? ` (${entries.length})` : ''}`}
+      action={
+        <button
+          type="button"
+          onClick={() => setAdding((a) => !a)}
+          className="text-xs text-accent inline-flex items-center gap-1"
+        >
+          <Plus size={12} /> {adding ? 'Cancel' : 'Add'}
+        </button>
+      }
+    >
+      {dueLine && (
+        <div className="text-xs mb-2 flex items-center gap-1.5">
+          <Wrench size={12} className="shrink-0 text-text-muted" />
+          {dueLine}
+        </div>
+      )}
+
+      {adding && (
+        <div className="border border-border rounded-md p-3 mb-3 grid grid-cols-1 sm:grid-cols-2 gap-2">
+          <Input label="Date" type="date" value={date} onChange={setDate} />
+          <Select<ServiceType>
+            label="Type"
+            value={type}
+            options={SERVICE_TYPES}
+            onChange={setType}
+          />
+          <Input label="Watchmaker" value={watchmaker} onChange={setWatchmaker} />
+          <MoneyInput
+            label="Cost"
+            value={cost}
+            onAmount={(amount) =>
+              setCost((prev) => ({ amount, currency: prev?.currency ?? 'GBP' }))
+            }
+            onCurrency={(currency) =>
+              setCost((prev) => ({ amount: prev?.amount ?? 0, currency }))
+            }
+          />
+          <label className="text-xs text-text-muted block sm:col-span-2">
+            Notes
+            <textarea
+              value={notes}
+              onChange={(e) => setNotes(e.target.value)}
+              rows={2}
+              className="mt-1 block w-full text-sm px-2 py-1.5 border border-border rounded-md bg-bg"
+            />
+          </label>
+          {err && <div className="text-xs text-danger sm:col-span-2">{err}</div>}
+          <div className="sm:col-span-2 flex justify-end">
+            <button
+              type="button"
+              onClick={() => void handleAdd()}
+              disabled={busy}
+              className="px-3 py-1.5 text-xs rounded-md bg-accent text-white disabled:opacity-50"
+            >
+              {busy ? 'Saving…' : 'Save service'}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {entries.length === 0 ? (
+        !dueLine && (
+          <div className="text-xs text-text-muted">
+            No service history. Set a service interval in Edit to get due dates.
+          </div>
+        )
+      ) : (
+        <ul className="divide-y divide-border -mx-3 sm:-mx-4">
+          {entries.map((e) => (
+            <li key={e.id} className="px-3 sm:px-4 py-2 flex items-start justify-between gap-3">
+              <div className="min-w-0">
+                <div className="text-sm text-text">
+                  {titleCase(e.type)}
+                  {e.watchmaker && (
+                    <span className="text-text-muted"> · {e.watchmaker}</span>
+                  )}
+                </div>
+                <div className="text-[11px] text-text-muted mt-0.5">
+                  {formatDate(e.date)}
+                  {e.costGbp != null && <> · {formatGbp(e.costGbp)}</>}
+                </div>
+                {e.notes && (
+                  <div className="text-[11px] text-text-subtle mt-0.5 whitespace-pre-wrap">
+                    {e.notes}
+                  </div>
+                )}
+              </div>
+              <button
+                type="button"
+                onClick={() => void handleDelete(e.id)}
+                className="text-text-subtle hover:text-danger shrink-0"
+                title="Delete entry"
+              >
+                <Trash2 size={13} />
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+    </Card>
   )
 }
 
@@ -684,6 +896,11 @@ function EditForm({ watch, onClose }: { watch: Watch; onClose: () => void }) {
           label="Year produced"
           value={w.yearProduced}
           onChange={(v) => update('yearProduced', v)}
+        />
+        <NumberInput
+          label="Service interval (months)"
+          value={w.serviceIntervalMonths}
+          onChange={(v) => update('serviceIntervalMonths', v)}
         />
 
         <Input

@@ -8,9 +8,10 @@ import { useData, useDataContext } from '../hooks/useData'
 import { daysSince, formatDate, formatGbp, todayIso, classNames } from '../lib/utils'
 import { getCurrentPosition, reverseGeocode } from '../lib/geocode'
 import { findNearestKnownCity } from '../lib/cityCoords'
+import { serviceDue } from '../lib/service'
 import type { Location, WearLogEntry } from '../types'
 import { StatusBadge } from '../components/StatusBadge'
-import { ArrowRight, Plus, Check, Cake, Repeat, RefreshCw } from 'lucide-react'
+import { ArrowRight, Plus, Check, Cake, Repeat, RefreshCw, Wrench } from 'lucide-react'
 
 export function Home() {
   return (
@@ -109,6 +110,12 @@ function HomeInner() {
     })
   }
   upcomingAnniversaries.sort((a, b) => a.daysUntil - b.daysUntil)
+
+  // Watches overdue for service or due within 60 days (owned only).
+  const serviceAlerts = owned
+    .map((w) => ({ w, due: serviceDue(w, data.serviceLog) }))
+    .filter((x) => x.due.daysUntil != null && x.due.daysUntil <= 60)
+    .sort((a, b) => (a.due.daysUntil ?? 0) - (b.due.daysUntil ?? 0))
 
   if (data.watches.length === 0) {
     return (
@@ -259,6 +266,34 @@ function HomeInner() {
           </span>
           <span className="text-[11px] text-text-subtle whitespace-nowrap">one tap</span>
         </button>
+      )}
+
+      {serviceAlerts.length > 0 && (
+        <div className="border border-border bg-surface rounded-lg p-3">
+          <div className="text-[11px] uppercase tracking-wide text-text-muted flex items-center gap-1.5 mb-1.5">
+            <Wrench size={12} /> Service
+          </div>
+          <ul className="space-y-1">
+            {serviceAlerts.map(({ w, due }) => (
+              <li key={w.id} className="flex items-baseline justify-between gap-2 text-sm">
+                <Link to={`/collection/${w.id}`} className="truncate hover:underline">
+                  <span className="text-text">{w.brand}</span>{' '}
+                  <span className="text-text-muted">{w.model}</span>
+                </Link>
+                <span
+                  className={classNames(
+                    'text-xs whitespace-nowrap',
+                    (due.daysUntil ?? 0) < 0 ? 'text-danger' : 'text-warning',
+                  )}
+                >
+                  {(due.daysUntil ?? 0) < 0
+                    ? `overdue ${Math.abs(due.daysUntil!)} days`
+                    : `due in ${due.daysUntil} days`}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </div>
       )}
 
       {upcomingAnniversaries.length > 0 && (
