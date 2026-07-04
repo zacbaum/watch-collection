@@ -1568,6 +1568,8 @@ function WatchYearHeatmapCard({
   wearLog: WearLogEntry[]
   watchColors: Map<string, string>
 }) {
+  // Hook must run before the empty-state early return (rules of hooks).
+  const narrow = useIsNarrow()
   const { rows, years, maxByWatch } = useMemo(() => {
     if (wearLog.length === 0) return { rows: [], years: [], maxByWatch: new Map<string, number>() }
     const overall = new Map<string, number>()
@@ -1621,7 +1623,6 @@ function WatchYearHeatmapCard({
     )
   }
 
-  const narrow = useIsNarrow()
   const LABEL_W = narrow ? 84 : 180
   const TOTAL_W = narrow ? 26 : 50
   const CELL_MIN = narrow ? 4 : 8
