@@ -192,7 +192,7 @@ function CollectionInner() {
 function CompositionSection({ watches }: { watches: Watch[] }) {
   return (
     <div className="mt-6 pt-6 border-t border-border space-y-3">
-      <h2 className="text-sm font-semibold uppercase tracking-wide text-text-muted">
+      <h2 className="text-sm font-medium text-text-muted">
         Composition
       </h2>
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
@@ -331,7 +331,6 @@ function WatchTile({
 
 function GalleryTile({ watch }: { watch: Watch }) {
   const muted = watch.status !== 'owned'
-  const accent = colorFor(`${watch.brand}|${watch.model}`)
   const photo = watch.photos?.[0]
   return (
     <Link
@@ -341,10 +340,6 @@ function GalleryTile({ watch }: { watch: Watch }) {
         muted && 'opacity-75',
       )}
     >
-      <div
-        className="absolute left-0 top-0 bottom-0 w-1 z-10"
-        style={{ backgroundColor: accent }}
-      />
       <div className="absolute top-2 right-2 z-10">
         <StatusBadge status={watch.status} size="xs" />
       </div>
@@ -359,7 +354,7 @@ function GalleryTile({ watch }: { watch: Watch }) {
           <Monogram brand={watch.brand} model={watch.model} size={72} rounded="lg" />
         )}
       </div>
-      <div className="px-3 py-2 pl-4">
+      <div className="px-3 py-2">
         <div className="text-sm font-semibold text-text truncate">{watch.brand}</div>
         <div className="text-xs text-text-muted truncate">
           {watch.model}

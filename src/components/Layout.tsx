@@ -38,8 +38,8 @@ export function Layout({ children }: LayoutProps) {
     <div className="min-h-screen flex flex-col bg-bg text-text">
       <header className="border-b border-border bg-surface/70 backdrop-blur-md sticky top-0 z-30">
         <div className="max-w-6xl mx-auto px-4 h-12 flex items-center gap-4">
-          <NavLink to="/" className="font-mono text-sm tracking-tight font-semibold">
-            ⌚ watch-collection
+          <NavLink to="/" className="font-display text-base font-medium tracking-tight">
+            Watches
           </NavLink>
           <nav className="hidden sm:flex items-center gap-1 ml-2">
             {NAV.map((n) => (

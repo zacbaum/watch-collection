@@ -107,7 +107,7 @@ function WishlistInner() {
                     <Priority value={w.priority} />
                     <button
                       onClick={() => setEditingId(w.id)}
-                      className="text-text-subtle hover:text-text"
+                      className="p-2 -m-1.5 text-text-subtle hover:text-text"
                       title="Edit"
                       aria-label="Edit wishlist item"
                     >
@@ -115,7 +115,7 @@ function WishlistInner() {
                     </button>
                     <button
                       onClick={() => void remove(w.id)}
-                      className="text-text-subtle hover:text-danger"
+                      className="p-2 -m-1.5 text-text-subtle hover:text-danger"
                       title="Remove"
                       aria-label="Remove wishlist item"
                     >
@@ -317,11 +317,11 @@ function Form({
               <button
                 type="button"
                 onClick={() => setImageUrl(undefined)}
-                className="absolute top-1 right-1 w-5 h-5 rounded-full bg-bg/90 border border-border text-text-muted hover:text-danger flex items-center justify-center"
+                className="absolute top-1 right-1 w-7 h-7 rounded-full bg-bg/90 border border-border text-text-muted hover:text-danger flex items-center justify-center"
                 title="Remove photo"
                 aria-label="Remove photo"
               >
-                <X size={11} />
+                <X size={13} />
               </button>
             </div>
           ) : (

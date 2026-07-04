@@ -431,7 +431,7 @@ function InsightTile({
 }) {
   return (
     <div className="border border-border rounded-md p-2 bg-surface-2/40">
-      <div className="text-[10px] uppercase tracking-wide text-text-muted">{label}</div>
+      <div className="text-[11px] text-text-muted">{label}</div>
       <div className="text-base font-semibold mt-0.5 tabular-nums">{value}</div>
       {sub && <div className="text-[10px] text-text-muted mt-0.5">{sub}</div>}
     </div>
@@ -715,7 +715,7 @@ function ServiceSection({
               <button
                 type="button"
                 onClick={() => void handleDelete(e.id)}
-                className="text-text-subtle hover:text-danger shrink-0"
+                className="p-2 -m-1.5 text-text-subtle hover:text-danger shrink-0"
                 title="Delete entry"
               >
                 <Trash2 size={13} />
@@ -766,7 +766,7 @@ function SaleSummary({ watch }: { watch: Watch }) {
 function Tile({ label, value, sub }: { label: string; value: React.ReactNode; sub?: React.ReactNode }) {
   return (
     <div className="border border-border rounded-lg p-4 bg-surface">
-      <div className="text-[11px] uppercase tracking-wide text-text-muted">{label}</div>
+      <div className="text-xs text-text-muted">{label}</div>
       <div className="mt-1 text-2xl font-semibold tabular-nums">{value}</div>
       {sub && <div className="text-[11px] text-text-muted mt-0.5">{sub}</div>}
     </div>
@@ -1163,11 +1163,11 @@ function EditForm({ watch, onClose }: { watch: Watch; onClose: () => void }) {
                 <button
                   type="button"
                   onClick={() => removePhoto(p)}
-                  className="absolute top-1 right-1 w-5 h-5 rounded-full bg-bg/90 border border-border text-text-muted hover:text-danger flex items-center justify-center"
+                  className="absolute top-1 right-1 w-7 h-7 rounded-full bg-bg/90 border border-border text-text-muted hover:text-danger flex items-center justify-center"
                   title="Remove photo"
                   aria-label="Remove photo"
                 >
-                  <X size={11} />
+                  <X size={13} />
                 </button>
               </div>
             ))}

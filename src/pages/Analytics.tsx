@@ -274,7 +274,7 @@ function HeadlineStrip({
       className="border border-border rounded-lg px-3 py-2 bg-surface"
       title={explanation}
     >
-      <div className="text-[10px] uppercase tracking-wide text-text-muted flex items-center gap-1">
+      <div className="text-[11px] text-text-muted flex items-center gap-1">
         <span>{label}</span>
         {explanation && (
           <span
@@ -1368,12 +1368,12 @@ function SellabilityCard({
                       <span className="text-text-muted">{w.model}</span>
                     </span>
                     {w.wasGift && (
-                      <span className="text-[10px] uppercase tracking-wide text-text-subtle border border-border rounded px-1 py-px shrink-0">
+                      <span className="text-[10px] text-text-subtle border border-border rounded px-1 py-px shrink-0">
                         gift
                       </span>
                     )}
                     {r.atSaleDate && (
-                      <span className="text-[10px] uppercase tracking-wide text-text-subtle border border-border rounded px-1 py-px shrink-0">
+                      <span className="text-[10px] text-text-subtle border border-border rounded px-1 py-px shrink-0">
                         at sale
                       </span>
                     )}

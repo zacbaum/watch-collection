@@ -233,7 +233,7 @@ function HomeInner() {
                 <Plus size={20} />
               </div>
               <div className="min-w-0">
-                <div className="text-[11px] uppercase tracking-wide opacity-80">
+                <div className="text-xs opacity-80">
                   {formatDate(today)}
                 </div>
                 <div className="text-base font-semibold">Log today's wear</div>
@@ -270,7 +270,7 @@ function HomeInner() {
 
       {serviceAlerts.length > 0 && (
         <div className="border border-border bg-surface rounded-lg p-3">
-          <div className="text-[11px] uppercase tracking-wide text-text-muted flex items-center gap-1.5 mb-1.5">
+          <div className="text-xs text-text-muted flex items-center gap-1.5 mb-1.5">
             <Wrench size={12} /> Service
           </div>
           <ul className="space-y-1">
@@ -298,7 +298,7 @@ function HomeInner() {
 
       {upcomingAnniversaries.length > 0 && (
         <div className="border border-border bg-surface rounded-lg p-3">
-          <div className="text-[11px] uppercase tracking-wide text-text-muted flex items-center gap-1.5 mb-1.5">
+          <div className="text-xs text-text-muted flex items-center gap-1.5 mb-1.5">
             <Cake size={12} /> Upcoming anniversaries
           </div>
           <ul className="space-y-1">
@@ -325,7 +325,7 @@ function HomeInner() {
         </div>
       )}
 
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+      <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
         <Stat label="Owned" value={owned.length} sub={`${data.watches.length} total tracked`} />
         <Stat
           label="Collection value"
@@ -375,7 +375,7 @@ function HomeInner() {
           sub={`${sold.length} sold`}
         />
         <div className="border border-border rounded-lg p-4 bg-surface">
-          <div className="text-[11px] uppercase tracking-wide text-text-muted">
+          <div className="text-xs text-text-muted">
             Dormant capital
           </div>
           <div className="mt-1 text-3xl font-semibold text-text tabular-nums">
@@ -393,7 +393,7 @@ function HomeInner() {
                 type="button"
                 onClick={() => setDormantDays(d)}
                 className={classNames(
-                  'px-1.5 py-0.5 transition',
+                  'px-2.5 py-1 transition',
                   dormantDays === d
                     ? 'bg-surface-2 text-text font-medium'
                     : 'text-text-muted hover:bg-surface-2/60',
