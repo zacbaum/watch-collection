@@ -60,6 +60,18 @@ import {
 } from '../lib/wearStats'
 import { format, parseISO } from 'date-fns'
 
+// Recharts' default tooltip ships hardcoded light colours; give it theme
+// variables so it stays readable in dark mode. Custom `content` tooltips
+// already use bg-bg/border-border classes.
+const TOOLTIP_STYLE = {
+  fontSize: 11,
+  backgroundColor: 'var(--color-bg)',
+  border: '1px solid var(--color-border)',
+  borderRadius: 6,
+  color: 'var(--color-text)',
+} as const
+const TOOLTIP_LABEL_STYLE = { color: 'var(--color-text)' } as const
+
 export function Analytics() {
   return (
     <Gate>
@@ -387,13 +399,13 @@ function WearDistributionCard({
                     key={c.id}
                     fill={c.color}
                     fillOpacity={c.inactive ? 0.5 : 1}
-                    stroke="#fff"
+                    stroke="var(--color-bg)"
                     strokeWidth={1}
                   />
                 ))}
               </Pie>
               <Tooltip
-                contentStyle={{ fontSize: 11 }}
+                contentStyle={TOOLTIP_STYLE} labelStyle={TOOLTIP_LABEL_STYLE}
                 formatter={(v, name) => [
                   `${v} wears (${totalWears > 0 ? Math.round((Number(v) / totalWears) * 100) : 0}%)`,
                   name,
@@ -464,14 +476,14 @@ function CashFlowCard({ watches }: { watches: Watch[] }) {
         <div className="flex-1 min-h-56">
           <ResponsiveContainer width="100%" height="100%">
             <BarChart data={rows} stackOffset="sign">
-              <CartesianGrid stroke="#f4f4f3" />
+              <CartesianGrid stroke="var(--color-border)" />
               <XAxis dataKey="year" fontSize={10} />
               <YAxis
                 fontSize={10}
                 tickFormatter={(v) => `£${(Math.abs(v) / 1000).toFixed(0)}k`}
               />
               <Tooltip
-                contentStyle={{ fontSize: 11 }}
+                contentStyle={TOOLTIP_STYLE} labelStyle={TOOLTIP_LABEL_STYLE}
                 content={({ active, payload, label }) => {
                   if (!active || !payload?.length) return null
                   const d = payload[0].payload as (typeof rows)[0]
@@ -596,11 +608,11 @@ function WatchFlowCard({ watches }: { watches: Watch[] }) {
           <div className="flex-1 min-h-56">
             <ResponsiveContainer width="100%" height="100%">
               <ComposedChart data={rows} stackOffset="sign">
-                <CartesianGrid stroke="#f4f4f3" />
+                <CartesianGrid stroke="var(--color-border)" />
                 <XAxis dataKey="year" fontSize={10} />
                 <YAxis fontSize={10} allowDecimals={false} />
                 <Tooltip
-                  contentStyle={{ fontSize: 11 }}
+                  contentStyle={TOOLTIP_STYLE} labelStyle={TOOLTIP_LABEL_STYLE}
                   content={({ active, payload, label }) => {
                     if (!active || !payload?.length) return null
                     const d = payload[0].payload as (typeof rows)[0]
@@ -638,9 +650,9 @@ function WatchFlowCard({ watches }: { watches: Watch[] }) {
                 <Line
                   type="monotone"
                   dataKey="netTotal"
-                  stroke="#1c1917"
+                  stroke="var(--color-text)"
                   strokeWidth={2}
-                  dot={{ r: 3, fill: '#1c1917', stroke: '#1c1917' }}
+                  dot={{ r: 3, fill: 'var(--color-text)', stroke: 'var(--color-text)' }}
                   isAnimationActive={false}
                 />
               </ComposedChart>
@@ -800,7 +812,7 @@ function CostPerWearOverTimeCard({
       <div className="flex-1 min-h-72">
         <ResponsiveContainer width="100%" height="100%">
           <LineChart data={rows} margin={{ left: 8, right: 16, top: 8, bottom: 8 }}>
-            <CartesianGrid stroke="#f4f4f3" />
+            <CartesianGrid stroke="var(--color-border)" />
             <XAxis
               dataKey="week"
               fontSize={10}
@@ -901,7 +913,7 @@ function WearsVsSpendCard({
         <div className="flex-1 min-h-72">
           <ResponsiveContainer width="100%" height="100%">
             <ScatterChart margin={{ top: 8, right: 12, bottom: 24, left: 12 }}>
-              <CartesianGrid stroke="#f4f4f3" />
+              <CartesianGrid stroke="var(--color-border)" />
               <XAxis
                 type="number"
                 dataKey="cost"
@@ -941,7 +953,7 @@ function WearsVsSpendCard({
                   name === 'cost' ? [`£${Number(v).toLocaleString()}`, 'Cost'] : [`${v} wears`, 'Wears']
                 }
                 labelFormatter={() => ''}
-                contentStyle={{ fontSize: 11 }}
+                contentStyle={TOOLTIP_STYLE} labelStyle={TOOLTIP_LABEL_STYLE}
                 content={({ active, payload }) => {
                   if (!active || !payload?.length) return null
                   const d = payload[0].payload as typeof rows[0]
@@ -1004,7 +1016,7 @@ function RotationDiversityCard({ wearLog }: { wearLog: WearLogEntry[] }) {
         <div className="flex-1 min-h-56">
           <ResponsiveContainer width="100%" height="100%">
             <LineChart data={points}>
-              <CartesianGrid stroke="#f4f4f3" />
+              <CartesianGrid stroke="var(--color-border)" />
               <XAxis dataKey="month" fontSize={10} />
               <YAxis fontSize={10} allowDecimals={false} />
               <Line
@@ -1101,7 +1113,7 @@ function WatchShareCard({
       <div className="h-72 w-full">
         <ResponsiveContainer width="100%" height="100%">
           <BarChart data={rows} barCategoryGap={1}>
-            <CartesianGrid stroke="#f4f4f3" vertical={false} />
+            <CartesianGrid stroke="var(--color-border)" vertical={false} />
             <XAxis
               dataKey="month"
               fontSize={10}
@@ -1768,7 +1780,7 @@ function TravelCompanionCard({
         <div style={{ height: Math.max(180, rows.length * 24) }}>
           <ResponsiveContainer width="100%" height="100%">
             <BarChart data={rows} layout="vertical" margin={{ left: 8, right: 8 }}>
-              <CartesianGrid stroke="#f4f4f3" />
+              <CartesianGrid stroke="var(--color-border)" />
               <XAxis
                 type="number"
                 scale="log"
@@ -1785,7 +1797,7 @@ function TravelCompanionCard({
               />
               <Tooltip
                 cursor={{ fill: 'rgba(0,0,0,0.03)' }}
-                contentStyle={{ fontSize: 11 }}
+                contentStyle={TOOLTIP_STYLE} labelStyle={TOOLTIP_LABEL_STYLE}
                 formatter={(v, name) => [v, name === 'home' ? 'Home' : 'Away']}
               />
               <Bar dataKey="home" stackId="loc" fill="#2563eb" radius={[0, 0, 0, 0]}>

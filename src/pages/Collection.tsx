@@ -29,6 +29,17 @@ import { colorFor } from '../lib/palette'
 import { nanoid } from 'nanoid'
 import { Plus } from 'lucide-react'
 
+// Recharts' default tooltip ships hardcoded light colours; give it theme
+// variables so it stays readable in dark mode.
+const TOOLTIP_STYLE = {
+  fontSize: 11,
+  backgroundColor: 'var(--color-bg)',
+  border: '1px solid var(--color-border)',
+  borderRadius: 6,
+  color: 'var(--color-text)',
+} as const
+const TOOLTIP_LABEL_STYLE = { color: 'var(--color-text)' } as const
+
 export function Collection() {
   return (
     <Gate>
@@ -445,7 +456,7 @@ function BrandMixCard({ watches }: { watches: Watch[] }) {
                   <Cell key={c.name} fill={colorFor(c.name)} />
                 ))}
               </Pie>
-              <Tooltip />
+              <Tooltip contentStyle={TOOLTIP_STYLE} labelStyle={TOOLTIP_LABEL_STYLE} />
               <Legend wrapperStyle={{ fontSize: 11 }} />
             </PieChart>
           </ResponsiveContainer>
@@ -483,7 +494,7 @@ function CaseGeometryCard({ watches }: { watches: Watch[] }) {
         <div className="h-48">
           <ResponsiveContainer width="100%" height="100%">
             <ScatterChart margin={{ top: 8, right: 12, bottom: 18, left: 4 }}>
-              <CartesianGrid stroke="#f4f4f3" />
+              <CartesianGrid stroke="var(--color-border)" />
               <XAxis
                 type="number"
                 dataKey="size"
@@ -564,10 +575,10 @@ function LugWidthHistogramCard({ watches }: { watches: Watch[] }) {
         <div className="h-48">
           <ResponsiveContainer width="100%" height="100%">
             <BarChart data={rows}>
-              <CartesianGrid stroke="#f4f4f3" vertical={false} />
+              <CartesianGrid stroke="var(--color-border)" vertical={false} />
               <XAxis dataKey="width" fontSize={10} />
               <YAxis fontSize={10} allowDecimals={false} />
-              <Tooltip contentStyle={{ fontSize: 11 }} />
+              <Tooltip contentStyle={TOOLTIP_STYLE} labelStyle={TOOLTIP_LABEL_STYLE} />
               <Bar dataKey="count" fill="#0d9488" radius={[3, 3, 0, 0]} />
             </BarChart>
           </ResponsiveContainer>
@@ -606,10 +617,10 @@ function DecadeHistogramCard({ watches }: { watches: Watch[] }) {
         <div className="h-48">
           <ResponsiveContainer width="100%" height="100%">
             <BarChart data={rows}>
-              <CartesianGrid stroke="#f4f4f3" vertical={false} />
+              <CartesianGrid stroke="var(--color-border)" vertical={false} />
               <XAxis dataKey="decade" fontSize={10} />
               <YAxis fontSize={10} allowDecimals={false} />
-              <Tooltip contentStyle={{ fontSize: 11 }} />
+              <Tooltip contentStyle={TOOLTIP_STYLE} labelStyle={TOOLTIP_LABEL_STYLE} />
               <Bar dataKey="count" fill="#7c3aed" radius={[3, 3, 0, 0]} />
             </BarChart>
           </ResponsiveContainer>
