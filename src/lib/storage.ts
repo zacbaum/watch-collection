@@ -69,7 +69,11 @@ async function putFile(
   )
   if (!res.ok) {
     const text = await res.text().catch(() => '')
-    throw new Error(`GitHub PUT ${path} ${res.status}: ${text}`)
+    const err = new Error(`GitHub PUT ${path} ${res.status}: ${text}`) as Error & {
+      status?: number
+    }
+    err.status = res.status
+    throw err
   }
   const json = await res.json()
   return { sha: json.content.sha }
@@ -99,8 +103,20 @@ export async function loadData(cfg: AuthConfig): Promise<AppData> {
 export async function saveData(cfg: AuthConfig, data: AppData, message = 'Update data'): Promise<void> {
   const next: AppData = { ...data, updatedAt: new Date().toISOString() }
   const json = JSON.stringify(next, null, 2)
-  const result = await putFile(cfg, DATA_PATH, json, message, cachedSha)
-  cachedSha = result.sha
+  try {
+    const result = await putFile(cfg, DATA_PATH, json, message, cachedSha)
+    cachedSha = result.sha
+  } catch (e) {
+    const status = (e as { status?: number }).status
+    // 409/422 = our cached sha is stale (the file changed under us, e.g. a
+    // write from another device). Re-fetch the current sha and retry once —
+    // last write wins, which is the right trade-off for a single-user app
+    // vs. silently losing this write.
+    if (status !== 409 && status !== 422) throw e
+    const fresh = await getFile(cfg, DATA_PATH)
+    const result = await putFile(cfg, DATA_PATH, json, message, fresh?.sha)
+    cachedSha = result.sha
+  }
 }
 
 /** Upload a binary photo (Blob) to data repo at photos/{filename}. Returns the path. */

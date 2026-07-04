@@ -22,6 +22,10 @@ export interface DataContextValue {
   state: DataState
   auth: AuthConfig | null
   syncing: boolean
+  /** Message from the most recent failed save, or null. Cleared on the next
+   *  mutate. The in-memory state is still updated optimistically, so a
+   *  non-null value means local changes may not have reached the repo. */
+  saveError: string | null
   reload: () => Promise<void>
   setAuth: (cfg: AuthConfig | null) => void
   mutate: (
@@ -54,6 +58,7 @@ export function DataProvider({ children }: DataProviderProps) {
     loadAuth() ? { kind: 'loading' } : { kind: 'unconfigured' },
   )
   const [syncing, setSyncing] = useState(false)
+  const [saveError, setSaveError] = useState<string | null>(null)
   const writeQueue = useRef<Promise<void>>(Promise.resolve())
 
   const reload = useCallback(async () => {
@@ -100,9 +105,15 @@ export function DataProvider({ children }: DataProviderProps) {
       const next = fn(state.data)
       setState({ kind: 'ready', data: next })
       setSyncing(true)
+      setSaveError(null)
+      // Failures are recorded in saveError rather than rethrown: the queue
+      // must always resolve, otherwise one failed save leaves .then() on a
+      // rejected promise and every subsequent write silently never runs.
       const job = writeQueue.current.then(async () => {
         try {
           await saveData(cfg, next, options?.message ?? 'Update data')
+        } catch (e) {
+          setSaveError((e as Error).message)
         } finally {
           setSyncing(false)
         }
@@ -114,8 +125,8 @@ export function DataProvider({ children }: DataProviderProps) {
   )
 
   const value = useMemo<DataContextValue>(
-    () => ({ state, auth, syncing, reload, setAuth, mutate }),
-    [state, auth, syncing, reload, setAuth, mutate],
+    () => ({ state, auth, syncing, saveError, reload, setAuth, mutate }),
+    [state, auth, syncing, saveError, reload, setAuth, mutate],
   )
 
   return <DataContext.Provider value={value}>{children}</DataContext.Provider>

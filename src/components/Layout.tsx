@@ -29,7 +29,7 @@ const NAV = [
 ]
 
 export function Layout({ children }: LayoutProps) {
-  const { state, syncing } = useDataContext()
+  const { state, syncing, saveError } = useDataContext()
   const location = useLocation()
 
   return (
@@ -61,7 +61,7 @@ export function Layout({ children }: LayoutProps) {
           </nav>
           <div className="flex-1" />
           <StreakIndicator state={state} />
-          <SyncIndicator state={state} syncing={syncing} />
+          <SyncIndicator state={state} syncing={syncing} saveError={saveError} />
           <NavLink
             to="/log"
             className={classNames(
@@ -157,10 +157,23 @@ function StreakIndicator({ state }: { state: ReturnType<typeof useDataContext>['
 function SyncIndicator({
   state,
   syncing,
+  saveError,
 }: {
   state: ReturnType<typeof useDataContext>['state']
   syncing: boolean
+  saveError: string | null
 }) {
+  if (state.kind === 'ready' && !syncing && saveError) {
+    return (
+      <span
+        className="text-xs text-danger flex items-center gap-1"
+        title={`${saveError} — your latest change may not be saved. It will retry on your next edit, or reload to discard.`}
+      >
+        <CloudOff size={14} />
+        Save failed
+      </span>
+    )
+  }
   if (state.kind === 'unconfigured') {
     return (
       <span className="text-xs text-text-muted flex items-center gap-1">
