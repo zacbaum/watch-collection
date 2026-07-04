@@ -591,27 +591,33 @@ function ServiceSection({
   }
 
   // Due status: alarm only on derivable dates (never guess for vintage
-  // pieces with no recorded history).
+  // pieces with no recorded history). A manufacture-anchored date is the
+  // FIRST service — phrase it as such.
   let dueLine: React.ReactNode = null
   if (due.dueDate != null && due.daysUntil != null) {
+    const label = due.basis === 'manufacture' ? 'First service' : 'Service'
     dueLine =
       due.daysUntil < 0 ? (
         <span className="text-danger">
-          Service overdue — was due {formatDate(due.dueDate)}
+          {label} overdue — was due {formatDate(due.dueDate)}
+          {due.basis === 'manufacture' && ' (from manufacture date)'}
         </span>
       ) : due.daysUntil <= 90 ? (
         <span className="text-warning">
-          Service due in {due.daysUntil} day{due.daysUntil === 1 ? '' : 's'} (
+          {label} due in {due.daysUntil} day{due.daysUntil === 1 ? '' : 's'} (
           {formatDate(due.dueDate)})
         </span>
       ) : (
-        <span className="text-text-muted">Next service due {formatDate(due.dueDate)}</span>
+        <span className="text-text-muted">
+          {due.basis === 'manufacture' ? 'First service' : 'Next service'} due{' '}
+          {formatDate(due.dueDate)}
+        </span>
       )
   } else if (watch.serviceIntervalMonths && !due.lastFullService) {
     dueLine = (
       <span className="text-text-subtle">
-        No full service recorded yet — log one to start the {watch.serviceIntervalMonths}
-        -month countdown.
+        No service history — log a full service, or set a manufacture date in
+        Edit to anchor the first {watch.serviceIntervalMonths}-month countdown.
       </span>
     )
   }
@@ -783,6 +789,7 @@ function MetadataView({ watch }: { watch: Watch }) {
     ['Bezel', titleCase(watch.bezel) || null],
     ['Crystal', titleCase(watch.crystal) || null],
     ['Year produced', watch.yearProduced],
+    ['Manufactured', watch.manufactureDate ? formatDate(watch.manufactureDate) : null],
     ['Acquired', watch.acquisitionDate ? formatDate(watch.acquisitionDate) : null],
     ['Price', formatMoney(watch.acquisitionPrice)],
     ['Price (GBP)', watch.acquisitionPriceGbp ? formatGbp(watch.acquisitionPriceGbp) : null],
@@ -1027,6 +1034,12 @@ function EditForm({ watch, onClose }: { watch: Watch; onClose: () => void }) {
           label="Year produced"
           value={w.yearProduced}
           onChange={(v) => update('yearProduced', v)}
+        />
+        <Input
+          label="Manufacture date (anchors first service)"
+          type="date"
+          value={w.manufactureDate ?? ''}
+          onChange={(v) => update('manufactureDate', v || undefined)}
         />
         <NumberInput
           label="Service interval (months)"

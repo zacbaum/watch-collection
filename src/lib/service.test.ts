@@ -61,4 +61,28 @@ describe('serviceDue', () => {
     expect(d.lastFullService).toBe('2024-01-15')
     expect(d.dueDate).toBeNull()
   })
+
+  it('anchors the first service on manufactureDate when no service recorded', () => {
+    const d = serviceDue(
+      watch({ manufactureDate: '2023-04-10', serviceIntervalMonths: 60 }),
+      [],
+    )
+    expect(d.dueDate).toBe('2028-04-10')
+    expect(d.basis).toBe('manufacture')
+  })
+
+  it('a recorded full service beats the manufacture anchor', () => {
+    const d = serviceDue(
+      watch({ manufactureDate: '2018-01-01', serviceIntervalMonths: 60 }),
+      [entry({ date: '2024-01-15' })],
+    )
+    expect(d.dueDate).toBe('2029-01-15')
+    expect(d.basis).toBe('service')
+  })
+
+  it('manufactureDate alone (no interval) derives nothing', () => {
+    const d = serviceDue(watch({ manufactureDate: '2023-04-10' }), [])
+    expect(d.dueDate).toBeNull()
+    expect(d.basis).toBeNull()
+  })
 })

@@ -44,6 +44,9 @@ export interface Watch {
   bezel?: string
   crystal?: string
   yearProduced?: number
+  /** Exact manufacture date when known — anchors the first-service due date
+   *  for watches with no service history yet. */
+  manufactureDate?: string
 
   acquisitionDate?: string
   acquisitionPrice?: Money
