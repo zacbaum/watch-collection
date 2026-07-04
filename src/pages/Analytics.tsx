@@ -22,8 +22,6 @@ import {
   CartesianGrid,
   LineChart,
   Line,
-  ScatterChart,
-  Scatter,
   ComposedChart,
   PieChart,
   Pie,
@@ -37,7 +35,7 @@ import { Empty } from '../components/Empty'
 import { CalendarHeatmap } from '../components/CalendarHeatmap'
 import { TimeRangeFilter } from '../components/TimeRangeFilter'
 import { useData } from '../hooks/useData'
-import type { Valuation, Watch, WearLogEntry } from '../types'
+import type { Watch, WearLogEntry } from '../types'
 import { classNames, formatGbp } from '../lib/utils'
 import { lookupCoords } from '../lib/cityCoords'
 import { buildWatchColorMap } from '../lib/palette'
@@ -193,23 +191,11 @@ function AnalyticsInner() {
           since={since}
           watchColors={watchColors}
         />
-        <WearsVsSpendCard
-          watches={data.watches}
-          wearLog={data.wearLog}
-          watchColors={watchColors}
-        />
         <CashFlowCard watches={data.watches} />
         <WatchFlowCard watches={data.watches} />
-        <CollectionValueCard watches={data.watches} valuations={data.valuations} />
       </div>
 
       <SellabilityCard
-        watches={data.watches}
-        wearLog={data.wearLog}
-        watchColors={watchColors}
-      />
-
-      <WatchYearHeatmapCard
         watches={data.watches}
         wearLog={data.wearLog}
         watchColors={watchColors}
@@ -515,7 +501,7 @@ function CashFlowCard({ watches }: { watches: Watch[] }) {
   const hasAny = rows.some((r) => r.spend > 0 || r.proceedsAbs > 0)
 
   return (
-    <Card title="Cash flow per year (GBP) · purchases above, sales below">
+    <Card title="Cash flow per year · buys up, sales down">
       {!hasAny ? (
         <div className="text-xs text-text-muted">
           No priced acquisitions or sales recorded.
@@ -646,7 +632,7 @@ function WatchFlowCard({ watches }: { watches: Watch[] }) {
   const C_GIFT = '#7c3aed'
 
   return (
-    <Card title="Watches in vs out per year · bought/gifted above, sold/gifted below">
+    <Card title="Watches in / out per year">
       {!hasAny ? (
         <div className="text-xs text-text-muted">
           No acquisition or disposal dates recorded.
@@ -742,102 +728,6 @@ function WatchFlowCard({ watches }: { watches: Watch[] }) {
           )}
         </>
       )}
-    </Card>
-  )
-}
-
-function CollectionValueCard({
-  watches,
-  valuations,
-}: {
-  watches: Watch[]
-  valuations: Valuation[]
-}) {
-  const rows = useMemo(() => {
-    const starts = [
-      ...watches.map((w) => w.acquisitionDate).filter((d): d is string => !!d),
-      ...valuations.map((v) => v.date),
-    ].sort()
-    if (starts.length === 0) return []
-    const months = monthKeysInRange(starts[0], new Date().toISOString().slice(0, 10))
-
-    const valsByWatch = new Map<string, Valuation[]>()
-    for (const v of [...valuations].sort((a, b) => a.date.localeCompare(b.date))) {
-      const arr = valsByWatch.get(v.watchId) ?? []
-      arr.push(v)
-      valsByWatch.set(v.watchId, arr)
-    }
-
-    return months.map((m) => {
-      // '-31' compares correctly against any real ISO date within the month.
-      const monthEnd = `${m}-31`
-      let total = 0
-      for (const w of watches) {
-        if (!w.acquisitionDate || w.acquisitionDate > monthEnd) continue
-        if (w.status === 'sold' && w.saleDate && w.saleDate <= monthEnd) continue
-        if (w.status === 'gifted' && w.giftedDate && w.giftedDate <= monthEnd) continue
-        // Latest valuation up to month end; acquisition price before the
-        // first valuation exists.
-        let val: number | undefined
-        for (const v of valsByWatch.get(w.id) ?? []) {
-          if (v.date <= monthEnd) val = v.valueGbp
-          else break
-        }
-        total += val ?? w.acquisitionPriceGbp ?? 0
-      }
-      return { month: m, total: Math.round(total) }
-    })
-  }, [watches, valuations])
-
-  const hasAny = rows.some((r) => r.total > 0)
-
-  return (
-    <Card title="Collection value over time · valuations carry forward">
-      {!hasAny ? (
-        <div className="text-xs text-text-muted">
-          Needs acquisition dates and prices. Value snapshots record
-          automatically whenever a watch's current value is updated.
-        </div>
-      ) : (
-        <div className="flex-1 min-h-56">
-          <ResponsiveContainer width="100%" height="100%">
-            <LineChart data={rows} margin={{ top: 8, right: 12, bottom: 4, left: 4 }}>
-              <CartesianGrid stroke="var(--color-border)" />
-              <XAxis
-                dataKey="month"
-                fontSize={10}
-                interval="preserveStartEnd"
-                tickFormatter={(m) => {
-                  const [y, mm] = String(m).split('-')
-                  return parseInt(mm, 10) === 1 ? `'${y.slice(2)}` : ''
-                }}
-              />
-              <YAxis
-                fontSize={10}
-                width={44}
-                tickFormatter={(v) => `£${(Number(v) / 1000).toFixed(0)}k`}
-              />
-              <Tooltip
-                contentStyle={TOOLTIP_STYLE}
-                labelStyle={TOOLTIP_LABEL_STYLE}
-                formatter={(v) => [formatGbp(Number(v)), 'Value']}
-              />
-              <Line
-                type="monotone"
-                dataKey="total"
-                stroke="var(--color-accent)"
-                strokeWidth={2}
-                dot={false}
-                isAnimationActive={false}
-              />
-            </LineChart>
-          </ResponsiveContainer>
-        </div>
-      )}
-      <div className="text-[11px] text-text-subtle mt-1">
-        Uses each watch's latest recorded valuation (acquisition price before
-        the first one). Owned watches only, at each point in time.
-      </div>
     </Card>
   )
 }
@@ -940,7 +830,7 @@ function CostPerWearOverTimeCard({
 
   if (rows.length === 0 || eligible.length === 0) {
     return (
-      <Card title="Cost per wear over time" action={inactiveToggle}>
+      <Card title="Cost per wear" action={inactiveToggle}>
         <div className="text-xs text-text-muted">
           Need acquisition prices and wear entries on at least one watch.
         </div>
@@ -950,7 +840,7 @@ function CostPerWearOverTimeCard({
 
   return (
     <Card
-      title="Cost per wear over time · log scale · lower is better"
+      title="Cost per wear · log scale"
       action={inactiveToggle}
     >
       <div className="flex-1 min-h-72">
@@ -993,126 +883,6 @@ function CostPerWearOverTimeCard({
         </ResponsiveContainer>
       </div>
       <ChipLegend watches={eligible} watchColors={watchColors} />
-    </Card>
-  )
-}
-
-function WearsVsSpendCard({
-  watches,
-  wearLog,
-  watchColors,
-}: {
-  watches: Watch[]
-  wearLog: WearLogEntry[]
-  watchColors: Map<string, string>
-}) {
-  const narrow = useIsNarrow()
-  const rows = useMemo(() => {
-    const wearsByWatch = new Map<string, number>()
-    for (const e of wearLog) wearsByWatch.set(e.watchId, (wearsByWatch.get(e.watchId) ?? 0) + 1)
-    return watches
-      .map((w) => {
-        const wears = wearsByWatch.get(w.id) ?? 0
-        const cost = w.acquisitionPriceGbp
-        // Log scale on both axes requires positive values
-        if (cost == null || cost <= 0 || wears <= 0) return null
-        const inactive = w.status === 'sold' || w.status === 'gifted'
-        return {
-          id: w.id,
-          name: `${w.brand} ${w.model}${w.wasGift ? ' (gift)' : ''}${inactive ? ` · ${w.status}` : ''}`,
-          cost,
-          wears,
-          isGift: !!w.wasGift,
-          inactive,
-          color: watchColors.get(w.id) ?? '#cccccc',
-        }
-      })
-      .filter((r): r is NonNullable<typeof r> => Boolean(r))
-  }, [watches, wearLog, watchColors])
-
-  return (
-    <Card title="Wears vs spend · log scale on both axes">
-      {rows.length === 0 ? (
-        <div className="text-xs text-text-muted">
-          Add acquisition prices to your watches to see this.
-        </div>
-      ) : (
-        <div className="flex-1 min-h-72">
-          <ResponsiveContainer width="100%" height="100%">
-            <ScatterChart margin={{ top: 8, right: 12, bottom: 24, left: 12 }}>
-              <CartesianGrid stroke="var(--color-border)" />
-              <XAxis
-                type="number"
-                dataKey="cost"
-                name="Cost"
-                scale="log"
-                domain={[50, 'auto']}
-                allowDataOverflow
-                fontSize={10}
-                tickFormatter={(v) =>
-                  v >= 1000 ? `£${(v / 1000).toFixed(0)}k` : `£${v.toFixed(0)}`
-                }
-                ticks={[50, 100, 250, 500, 1000, 2500, 5000, 10000]}
-                label={
-                  narrow
-                    ? undefined
-                    : { value: 'Cost (GBP)', position: 'insideBottom', offset: -8, fontSize: 10 }
-                }
-              />
-              <YAxis
-                type="number"
-                dataKey="wears"
-                name="Wears"
-                scale="log"
-                domain={[1, 'auto']}
-                allowDataOverflow
-                fontSize={10}
-                ticks={[1, 3, 10, 30, 100, 300, 1000]}
-                label={
-                  narrow
-                    ? undefined
-                    : { value: 'Total wears (log)', angle: -90, position: 'insideLeft', fontSize: 10 }
-                }
-              />
-              <Tooltip
-                cursor={{ strokeDasharray: '3 3' }}
-                formatter={(v, name) =>
-                  name === 'cost' ? [`£${Number(v).toLocaleString()}`, 'Cost'] : [`${v} wears`, 'Wears']
-                }
-                labelFormatter={() => ''}
-                contentStyle={TOOLTIP_STYLE} labelStyle={TOOLTIP_LABEL_STYLE}
-                content={({ active, payload }) => {
-                  if (!active || !payload?.length) return null
-                  const d = payload[0].payload as typeof rows[0]
-                  return (
-                    <div className="bg-bg border border-border rounded px-2 py-1 text-[11px]">
-                      <div className="font-medium">{d.name}</div>
-                      <div>
-                        £{d.cost.toLocaleString()} · {d.wears} wears
-                        {d.isGift && (
-                          <span className="text-text-muted"> (value at receipt)</span>
-                        )}
-                      </div>
-                      <div className="text-text-muted">
-                        £{(d.cost / Math.max(d.wears, 1)).toFixed(2)}/wear
-                      </div>
-                    </div>
-                  )
-                }}
-              />
-              <Scatter data={rows}>
-                {rows.map((r) => (
-                  <Cell
-                    key={r.id}
-                    fill={r.color}
-                    fillOpacity={r.inactive ? 0.5 : 0.9}
-                  />
-                ))}
-              </Scatter>
-            </ScatterChart>
-          </ResponsiveContainer>
-        </div>
-      )}
     </Card>
   )
 }
@@ -1225,7 +995,7 @@ function WatchShareCard({
 
   if (rows.length === 0 || rankedWatches.length === 0) {
     return (
-      <Card title={`Watch share over time (${rangeLabel})`}>
+      <Card title={`Watch share (${rangeLabel})`}>
         <div className="text-xs text-text-muted">No wear data in this window.</div>
       </Card>
     )
@@ -1236,7 +1006,7 @@ function WatchShareCard({
   const watchById = new Map(rankedWatches.map((w) => [w.id, w]))
 
   return (
-    <Card title={`Watch share over time · monthly · ranked per-bar (${rangeLabel})`}>
+    <Card title={`Watch share · monthly (${rangeLabel})`}>
       <div className="h-72 w-full">
         <ResponsiveContainer width="100%" height="100%">
           <BarChart data={rows} barCategoryGap={1}>
@@ -1511,20 +1281,25 @@ function SellabilityCard({
 
   return (
     <Card
-      title="Sellability · owned watches ranked by wear-pattern signals"
+      title="Sellability"
       action={action}
     >
-      <div className="text-[11px] text-text-muted mb-3">
-        Higher = more sellable. Composite of dormancy (40%, saturates at 3
-        months idle), wear-rate drop-off vs lifetime (30%, never-worn after
-        90 days = max signal), and fair-share under-rotation (30%, averaged
-        across 90/180/365-day windows so a single busy month can't hide
-        consistent under-use). Pure wear-pattern derived — no price input.
-        Tap any row for the per-component breakdown. Gifted watches faded.
-        Fair-share divisor counts every watch in rotation during the window
-        equally, regardless of how long it was owned — so a sold watch's
-        365d snapshot over-states its under-share if it was only owned for
-        part of that year.
+      <div className="text-[11px] text-text-muted mb-2">
+        Higher = more sellable. Tap a row for its breakdown.{' '}
+        <details className="inline-block align-baseline">
+          <summary className="cursor-pointer select-none text-text-subtle inline">
+            How it's scored
+          </summary>
+          <span className="block mt-1">
+            Dormancy (40%, saturates at 3 months idle) + wear-rate drop-off vs
+            lifetime (30%, never-worn after 90 days = max) + fair-share
+            under-rotation (30%, averaged over 90/180/365-day windows so one
+            busy month can't hide consistent under-use). Wear-pattern only —
+            no price input. Gifted watches are faded. The fair-share divisor
+            weighs every watch in a window equally regardless of ownership
+            length, so short-ownership sold watches over-state slightly.
+          </span>
+        </details>
       </div>
       {capitalAtRisk > 0 && (
         <div className="mb-3 px-3 py-2 rounded-md bg-surface-2/60 border border-border text-xs flex items-baseline justify-between">
@@ -1678,162 +1453,6 @@ function SellabilityCard({
   )
 }
 
-function WatchYearHeatmapCard({
-  watches,
-  wearLog,
-  watchColors,
-}: {
-  watches: Watch[]
-  wearLog: WearLogEntry[]
-  watchColors: Map<string, string>
-}) {
-  // Hook must run before the empty-state early return (rules of hooks).
-  const narrow = useIsNarrow()
-  const { rows, years, maxByWatch } = useMemo(() => {
-    if (wearLog.length === 0) return { rows: [], years: [], maxByWatch: new Map<string, number>() }
-    const overall = new Map<string, number>()
-    const cell = new Map<string, Map<number, number>>()
-    let minY = Infinity
-    let maxY = -Infinity
-    for (const e of wearLog) {
-      const y = parseInt(e.date.slice(0, 4), 10)
-      if (y < minY) minY = y
-      if (y > maxY) maxY = y
-      if (!cell.has(e.watchId)) cell.set(e.watchId, new Map())
-      const m = cell.get(e.watchId)!
-      m.set(y, (m.get(y) ?? 0) + 1)
-      overall.set(e.watchId, (overall.get(e.watchId) ?? 0) + 1)
-    }
-    maxY = Math.max(maxY, new Date().getFullYear())
-    const years: number[] = []
-    for (let y = minY; y <= maxY; y++) years.push(y)
-    const sortedWatches = [...watches]
-      .filter((w) => (overall.get(w.id) ?? 0) > 0)
-      .sort((a, b) => {
-        const aInactive = a.status === 'sold' || a.status === 'gifted'
-        const bInactive = b.status === 'sold' || b.status === 'gifted'
-        if (aInactive !== bInactive) return aInactive ? 1 : -1
-        return (overall.get(b.id) ?? 0) - (overall.get(a.id) ?? 0)
-      })
-    // Per-watch max so each row is normalized within itself
-    const maxByWatch = new Map<string, number>()
-    for (const w of sortedWatches) {
-      const m = cell.get(w.id)!
-      let max = 0
-      for (const v of m.values()) if (v > max) max = v
-      maxByWatch.set(w.id, max)
-    }
-    const rows = sortedWatches.map((w) => ({
-      watch: w,
-      cells: years.map((y) => ({
-        year: y,
-        count: cell.get(w.id)?.get(y) ?? 0,
-      })),
-      total: overall.get(w.id) ?? 0,
-    }))
-    return { rows, years, maxByWatch }
-  }, [watches, wearLog])
-
-  if (rows.length === 0) {
-    return (
-      <Card title="Wear heatmap · watch × year">
-        <div className="text-xs text-text-muted">No wear data.</div>
-      </Card>
-    )
-  }
-
-  const LABEL_W = narrow ? 84 : 180
-  const TOTAL_W = narrow ? 26 : 50
-  const CELL_MIN = narrow ? 4 : 8
-  // CSS grid: label column | N year columns (flex-equal) | total column
-  const gridTemplate = `${LABEL_W}px repeat(${years.length}, minmax(${CELL_MIN}px, 1fr)) ${TOTAL_W}px`
-  // Only force a minWidth (and enable horizontal scroll) when the natural
-  // minimum would overflow even a phone-width viewport. For typical year
-  // counts the grid now fluidly fills the card without scrolling.
-  const naturalMin = LABEL_W + years.length * CELL_MIN + TOTAL_W
-
-  return (
-    <Card title="Wear heatmap · watch × year" padding={false}>
-      <div className={`p-3 w-full${naturalMin > 360 ? ' overflow-x-auto' : ''}`}>
-        {/* Year header */}
-        <div
-          className="grid gap-x-1 items-end mb-1"
-          style={{ gridTemplateColumns: gridTemplate, minWidth: naturalMin }}
-        >
-          <div />
-          {years.map((y) => (
-            <div key={y} className="text-[10px] text-text-muted text-center">
-              {String(y).slice(2)}
-            </div>
-          ))}
-          <div className="text-[10px] text-text-muted text-left pl-2">total</div>
-        </div>
-
-        {/* Rows */}
-        {rows.map(({ watch, cells, total }, idx) => {
-          const max = maxByWatch.get(watch.id) ?? 1
-          const baseColor = watchColors.get(watch.id) ?? '#cccccc'
-          const inactive = watch.status === 'sold' || watch.status === 'gifted'
-          const prevInactive =
-            idx > 0 &&
-            (rows[idx - 1].watch.status === 'sold' ||
-              rows[idx - 1].watch.status === 'gifted')
-          const isFirstInactive = inactive && !prevInactive
-          return (
-            <div
-              key={watch.id}
-              className="grid gap-x-1 items-center mb-0.5"
-              style={{
-                gridTemplateColumns: gridTemplate,
-                minWidth: naturalMin,
-                ...(isFirstInactive
-                  ? {
-                      borderTop: '1px dashed var(--color-border-strong)',
-                      paddingTop: 6,
-                      marginTop: 6,
-                    }
-                  : {}),
-              }}
-            >
-              <div
-                className={`text-xs truncate pr-2${inactive ? ' opacity-60' : ''}`}
-              >
-                <span
-                  className="inline-block w-2 h-2 rounded-sm align-middle mr-1.5"
-                  style={{ backgroundColor: baseColor }}
-                />
-                <span className="text-text">{watch.brand}</span>{' '}
-                <span className="text-text-muted">{watch.model}</span>
-              </div>
-              {cells.map((c) => {
-                // Normalize within this watch's row
-                const intensity = c.count > 0 ? 0.2 + 0.8 * (c.count / max) : 0
-                return (
-                  <div
-                    key={c.year}
-                    title={`${watch.brand} ${watch.model} · ${c.year}: ${c.count} wears`}
-                    style={{
-                      height: 22,
-                      borderRadius: 3,
-                      backgroundColor:
-                        intensity > 0 ? baseColor : 'var(--color-surface-2)',
-                      opacity: intensity > 0 ? intensity : 1,
-                    }}
-                  />
-                )
-              })}
-              <div className="text-xs text-text-muted tabular-nums pl-2">
-                {total}
-              </div>
-            </div>
-          )
-        })}
-      </div>
-    </Card>
-  )
-}
-
-// Cities considered "home" — places the user has lived or had a long-term base
 const HOME_CITIES = new Set(['amersham', 'london', 'toronto', 'kingston'])
 
 function TravelCompanionCard({
@@ -1880,7 +1499,7 @@ function TravelCompanionCard({
   }, [watches, wearLog, watchColors])
 
   return (
-    <Card title="Travel companions · home (Amersham / London / Toronto / Kingston) vs away">
+    <Card title="Travel companions · home vs away">
       {rows.length === 0 ? (
         <div className="text-xs text-text-muted">No location data.</div>
       ) : (
