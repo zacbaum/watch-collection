@@ -3,8 +3,12 @@ import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
 import { VitePWA } from 'vite-plugin-pwa'
 
+// Shared between Vite's base and the PWA manifest so localhost installs work
+// the same as the GitHub Pages deployment.
+const base = process.env.NODE_ENV === 'production' ? '/watch-collection/' : '/'
+
 export default defineConfig({
-  base: process.env.NODE_ENV === 'production' ? '/watch-collection/' : '/',
+  base,
   server: {
     // Bind both IPv4 and IPv6 loopback so 'localhost' resolves reliably
     // on Windows regardless of resolver preference.
@@ -17,16 +21,17 @@ export default defineConfig({
     tailwindcss(),
     VitePWA({
       registerType: 'autoUpdate',
-      includeAssets: ['favicon.svg'],
+      includeAssets: ['favicon.svg', 'apple-touch-icon.png'],
       manifest: {
         name: 'Watch Collection',
         short_name: 'Watches',
         description: 'Personal watch collection manager',
-        theme_color: '#1f2937',
-        background_color: '#ffffff',
+        // Warm theme (the app default): light bg + dark bg
+        theme_color: '#fdfbf6',
+        background_color: '#fdfbf6',
         display: 'standalone',
-        start_url: '/watch-collection/',
-        scope: '/watch-collection/',
+        start_url: base,
+        scope: base,
         icons: [
           { src: 'pwa-192.png', sizes: '192x192', type: 'image/png' },
           { src: 'pwa-512.png', sizes: '512x512', type: 'image/png' },

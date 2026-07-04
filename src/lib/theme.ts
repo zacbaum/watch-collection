@@ -45,6 +45,7 @@ export function getMode(): ModeName {
 export function setTheme(t: ThemeName): void {
   localStorage.setItem(THEME_KEY, t)
   document.documentElement.dataset.theme = t
+  syncThemeColorMeta()
 }
 
 export function setMode(m: ModeName): void {
@@ -60,6 +61,26 @@ function applyMode(mode: ModeName): void {
   const dark = mode === 'dark' || (mode === 'auto' && systemIsDark())
   if (dark) document.documentElement.dataset.dark = '1'
   else delete document.documentElement.dataset.dark
+  syncThemeColorMeta()
+}
+
+/** Keep the browser-chrome / iOS-status-bar colour in step with the active
+ *  theme. index.html ships static light/dark theme-color metas for first
+ *  paint; this appends a dynamic one (last matching meta wins) that tracks
+ *  the resolved --color-bg of whatever theme+mode combination is live. */
+function syncThemeColorMeta(): void {
+  const bg = getComputedStyle(document.documentElement)
+    .getPropertyValue('--color-bg')
+    .trim()
+  if (!bg) return
+  let meta = document.querySelector<HTMLMetaElement>('meta[name="theme-color"][data-dynamic]')
+  if (!meta) {
+    meta = document.createElement('meta')
+    meta.name = 'theme-color'
+    meta.dataset.dynamic = '1'
+    document.head.appendChild(meta)
+  }
+  meta.content = bg
 }
 
 /** Call once at app boot to apply persisted prefs and start watching system. */
