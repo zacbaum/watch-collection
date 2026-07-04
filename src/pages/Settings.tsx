@@ -135,7 +135,8 @@ export function Settings() {
         <div className="text-xs text-text-muted mb-3">
           Your data lives on this device. Connecting a private GitHub repo
           backs up every change as a git commit (full history) and lets any
-          other device restore or stay in sync — newer side wins.
+          other device restore or stay in sync. Connecting from a fresh
+          device restores the backup; when both sides have data, newer wins.
         </div>
         {auth && (
           <div className="mb-3 flex items-center gap-2">

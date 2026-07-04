@@ -60,7 +60,21 @@ export function useData(): AppData {
 }
 
 function freshEmpty(): AppData {
-  return { ...EMPTY_DATA, updatedAt: new Date().toISOString() }
+  // Epoch timestamp, deliberately: a brand-new empty document must NEVER win
+  // newest-wins reconciliation against real data anywhere. Stamping it "now"
+  // is how a fresh browser once overwrote the entire backup repo on connect.
+  return { ...EMPTY_DATA, updatedAt: '1970-01-01T00:00:00.000Z' }
+}
+
+/** True when the document contains no user data at all. */
+function isEmptyDoc(d: AppData): boolean {
+  return (
+    d.watches.length === 0 &&
+    d.wearLog.length === 0 &&
+    d.wishlist.length === 0 &&
+    d.serviceLog.length === 0 &&
+    d.valuations.length === 0
+  )
 }
 
 /** Collect every photo path referenced by the document. */
@@ -106,14 +120,21 @@ export function DataProvider({ children }: { children: ReactNode }) {
     return job
   }, [])
 
-  /** Compare local vs remote; newer updatedAt wins. Also backfills any local
-   *  photos the repo is missing (e.g. photos added before backup was set up). */
+  /** Compare local vs remote; newer updatedAt wins — EXCEPT that an empty
+   *  local document never overwrites a non-empty backup, regardless of
+   *  timestamps. Connecting from a fresh device is a restore, not a push.
+   *  Also backfills any local photos the repo is missing. */
   const reconcile = useCallback(
     async (cfg: AuthConfig, local: AppData) => {
       try {
         const remote = await loadData(cfg)
         let current = local
-        if (!remote || remote.updatedAt < local.updatedAt) {
+        if (remote && isEmptyDoc(local) && !isEmptyDoc(remote)) {
+          // Fresh/blank device + real backup → always pull.
+          await dbPutData(remote)
+          setReady(remote)
+          current = remote
+        } else if (!remote || remote.updatedAt < local.updatedAt) {
           await saveData(cfg, local, 'Sync: push local changes')
         } else if (remote.updatedAt > local.updatedAt) {
           await dbPutData(remote)
