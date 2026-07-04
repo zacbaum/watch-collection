@@ -1,12 +1,16 @@
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
+import { nanoid } from 'nanoid'
 import { Gate } from '../components/Gate'
 import { Card, Stat } from '../components/Card'
 import { Empty } from '../components/Empty'
-import { useData } from '../hooks/useData'
+import { useData, useDataContext } from '../hooks/useData'
 import { daysSince, formatDate, formatGbp, todayIso, classNames } from '../lib/utils'
+import { getCurrentPosition, reverseGeocode } from '../lib/geocode'
+import { findNearestKnownCity } from '../lib/cityCoords'
+import type { Location, WearLogEntry } from '../types'
 import { StatusBadge } from '../components/StatusBadge'
-import { ArrowRight, Plus, Check, Cake } from 'lucide-react'
+import { ArrowRight, Plus, Check, Cake, Repeat, RefreshCw } from 'lucide-react'
 
 export function Home() {
   return (
@@ -18,7 +22,9 @@ export function Home() {
 
 function HomeInner() {
   const data = useData()
+  const { mutate } = useDataContext()
   const [dormantDays, setDormantDays] = useState<10 | 30 | 90>(90)
+  const [quickBusy, setQuickBusy] = useState(false)
   const owned = data.watches.filter((w) => w.status === 'owned')
   const paid = owned.filter((w) => !w.wasGift)
   const totalValue = owned.reduce((sum, w) => sum + (w.currentValueGbp ?? 0), 0)
@@ -128,6 +134,63 @@ function HomeInner() {
     ? data.watches.find((w) => w.id === todayEntry.watchId)
     : null
 
+  // Most recent past wear — the one-tap "again" candidate. Only offered when
+  // that watch is still owned.
+  const lastEntry = [...data.wearLog]
+    .filter((e) => e.date < today)
+    .sort((a, b) => b.date.localeCompare(a.date))[0]
+  const lastWatch = lastEntry
+    ? data.watches.find((w) => w.id === lastEntry.watchId && w.status === 'owned')
+    : null
+
+  async function quickLogAgain() {
+    if (!lastWatch || quickBusy) return
+    setQuickBusy(true)
+    try {
+      // Best-effort location, same flow as the Log page — never blocks the log.
+      let location: Location | undefined
+      let source: WearLogEntry['source'] = 'manual'
+      try {
+        const pos = await getCurrentPosition()
+        const lat = pos.coords.latitude
+        const lng = pos.coords.longitude
+        let city: string | undefined
+        let country: string | undefined
+        const near = findNearestKnownCity(lat, lng, 25)
+        if (near) {
+          city = near.city
+          country = near.country
+        } else {
+          try {
+            const loc = await reverseGeocode(lat, lng)
+            city = loc.city
+            country = loc.country
+          } catch {
+            /* lookup failed — keep coords */
+          }
+        }
+        location = { city, country, lat, lng }
+        source = 'geolocation'
+      } catch {
+        /* geolocation denied/unavailable */
+      }
+      const entry: WearLogEntry = {
+        id: nanoid(10),
+        watchId: lastWatch.id,
+        date: today,
+        location,
+        source,
+        createdAt: new Date().toISOString(),
+      }
+      await mutate(
+        (d) => ({ ...d, wearLog: [...d.wearLog, entry] }),
+        { message: `Log ${lastWatch.brand} ${lastWatch.model} on ${today}` },
+      )
+    } finally {
+      setQuickBusy(false)
+    }
+  }
+
   return (
     <div className="space-y-6">
       <Link
@@ -173,6 +236,30 @@ function HomeInner() {
           </>
         )}
       </Link>
+
+      {!todayEntry && lastWatch && (
+        <button
+          type="button"
+          onClick={() => void quickLogAgain()}
+          disabled={quickBusy}
+          className="w-full flex items-center justify-between gap-3 rounded-lg border border-border bg-surface px-4 py-2.5 hover:border-border-strong transition disabled:opacity-60 -mt-3"
+        >
+          <span className="flex items-center gap-2 min-w-0 text-sm">
+            {quickBusy ? (
+              <RefreshCw size={14} className="animate-spin shrink-0 text-text-muted" />
+            ) : (
+              <Repeat size={14} className="shrink-0 text-text-muted" />
+            )}
+            <span className="text-text-muted shrink-0">
+              {quickBusy ? 'Logging…' : 'Same as last time:'}
+            </span>
+            <span className="truncate text-text font-medium">
+              {lastWatch.brand} <span className="text-text-muted">{lastWatch.model}</span>
+            </span>
+          </span>
+          <span className="text-[11px] text-text-subtle whitespace-nowrap">one tap</span>
+        </button>
+      )}
 
       {upcomingAnniversaries.length > 0 && (
         <div className="border border-border bg-surface rounded-lg p-3">
