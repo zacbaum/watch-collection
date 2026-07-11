@@ -1464,7 +1464,6 @@ function TravelCompanionCard({
   wearLog: WearLogEntry[]
   watchColors: Map<string, string>
 }) {
-  const narrow = useIsNarrow()
   const rows = useMemo(() => {
     const counts = new Map<string, { home: number; away: number }>()
     for (const e of wearLog) {
@@ -1479,79 +1478,74 @@ function TravelCompanionCard({
       .map((w) => {
         const c = counts.get(w.id) ?? { home: 0, away: 0 }
         if (c.home === 0 && c.away === 0) return null
+        const total = c.home + c.away
         const inactive = w.status === 'sold' || w.status === 'gifted'
         return {
           id: w.id,
-          name: `${w.brand} ${w.model}${inactive ? ` · ${w.status}` : ''}`,
+          brand: w.brand,
+          model: w.model,
+          status: w.status,
           home: c.home,
           away: c.away,
-          total: c.home + c.away,
+          total,
+          awayPct: (c.away / total) * 100,
           color: watchColors.get(w.id) ?? '#cccccc',
           inactive,
         }
       })
       .filter((r): r is NonNullable<typeof r> => Boolean(r))
-      // Owned watches first (by total desc), then sold/gifted (also by total desc)
-      .sort((a, b) => {
-        if (a.inactive !== b.inactive) return a.inactive ? 1 : -1
-        return b.total - a.total
-      })
+      // Most-travelled first — the ordering itself answers "which watch is
+      // my travel companion". Total wears breaks ties.
+      .sort((a, b) => b.awayPct - a.awayPct || b.total - a.total)
   }, [watches, wearLog, watchColors])
 
+  // Percentage composition per row (100% bars) instead of log-scale counts —
+  // absolute magnitudes made the shares unreadable once one home city
+  // accumulated hundreds of wears. Counts live in the per-row detail text.
   return (
-    <Card title="Travel companions · home vs away">
+    <Card title="Travel companions · share of wears away">
       {rows.length === 0 ? (
         <div className="text-xs text-text-muted">No location data.</div>
       ) : (
-        <div style={{ height: Math.max(180, rows.length * 24) }}>
-          <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={rows} layout="vertical" margin={{ left: 8, right: 8 }}>
-              <CartesianGrid stroke="var(--color-border)" />
-              <XAxis
-                type="number"
-                scale="log"
-                domain={[1, 'auto']}
-                allowDataOverflow
-                fontSize={10}
-              />
-              <YAxis
-                dataKey="name"
-                type="category"
-                width={narrow ? 96 : 170}
-                fontSize={10}
-                interval={0}
-              />
-              <Tooltip
-                cursor={{ fill: 'rgba(0,0,0,0.03)' }}
-                contentStyle={TOOLTIP_STYLE} labelStyle={TOOLTIP_LABEL_STYLE}
-                formatter={(v, name) => [v, name === 'home' ? 'Home' : 'Away']}
-              />
-              <Bar dataKey="home" stackId="loc" fill="var(--color-accent)" radius={[0, 0, 0, 0]}>
-                {rows.map((r) => (
-                  <Cell key={`${r.id}-h`} fill={r.color} fillOpacity={r.inactive ? 0.5 : 1} />
-                ))}
-              </Bar>
-              <Bar dataKey="away" stackId="loc" fill="var(--color-border-strong)">
-                {rows.map((r) => (
-                  <Cell
-                    key={`${r.id}-a`}
-                    fill="var(--color-border-strong)"
-                    fillOpacity={r.inactive ? 0.5 : 1}
-                  />
-                ))}
-              </Bar>
-            </BarChart>
-          </ResponsiveContainer>
-        </div>
+        <ul className="space-y-2">
+          {rows.map((r) => (
+            <li
+              key={r.id}
+              className={classNames(r.inactive && 'opacity-60')}
+              title={`${r.away} of ${r.total} wears away (${r.awayPct.toFixed(0)}%) · ${r.home} at home`}
+            >
+              <div className="flex items-baseline justify-between gap-2 text-[11px] mb-0.5">
+                <span className="truncate min-w-0">
+                  <span className="text-text">{r.brand}</span>{' '}
+                  <span className="text-text-muted">{r.model}</span>
+                  {r.inactive && <span className="text-text-subtle"> · {r.status}</span>}
+                </span>
+                <span className="text-text-muted tabular-nums whitespace-nowrap">
+                  {r.away}/{r.total} away · {r.awayPct.toFixed(0)}%
+                </span>
+              </div>
+              <div className="flex h-2 rounded-full overflow-hidden bg-surface-2">
+                <div
+                  className="h-full"
+                  style={{ width: `${100 - r.awayPct}%`, backgroundColor: r.color }}
+                />
+                <div
+                  className="h-full"
+                  style={{ width: `${r.awayPct}%`, backgroundColor: 'var(--color-border-strong)' }}
+                />
+              </div>
+            </li>
+          ))}
+        </ul>
       )}
-      <div className="mt-2 flex gap-3 text-[11px] text-text-muted">
+      <div className="mt-3 flex gap-3 text-[11px] text-text-muted">
         <span className="inline-flex items-center gap-1">
           <span className="inline-block w-2.5 h-2.5 rounded-sm bg-text-muted" />
-          Watch color = Home
+          Watch colour = home
         </span>
         <span className="inline-flex items-center gap-1">
           <span className="inline-block w-2.5 h-2.5 rounded-sm bg-border-strong" />
-          Neutral = Away
+          Neutral = away
         </span>
       </div>
     </Card>
